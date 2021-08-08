@@ -1,0 +1,4 @@
+/.doit.db
+/build
+/test_pytest/.coverage
+__pycache__
