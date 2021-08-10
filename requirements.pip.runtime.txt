@@ -1,3 +1,3 @@
-hat-json
-hat-peg
-hat-util
+hat-json >= 0.5.1
+hat-peg >= 0.5.1
+hat-util >= 0.5.4
