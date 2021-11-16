@@ -8,7 +8,7 @@ extensions = [
 ]
 
 version = (root_path / 'VERSION').read_text().strip()
-project = 'hat-json'
+project = 'hat-asn1'
 copyright = '2020-2021, Hat Open AUTHORS'
 master_doc = 'index'
 
