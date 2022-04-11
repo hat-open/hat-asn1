@@ -137,11 +137,11 @@ def test_parse(asn1_def, refs_json):
     ('T3', [True, True, False, True]),
     ('T4', b'0123'),
     ('T5', None),
-    ('T6', [1, 5, 3]),
-    ('T6', [1, 5, 3, 7, 9, 2]),
-    ('T6', [1, 0]),
-    ('T6', [2, 3, 1]),
-    ('T6', [0, 0]),
+    ('T6', (1, 5, 3)),
+    ('T6', (1, 5, 3, 7, 9, 2)),
+    ('T6', (1, 0)),
+    ('T6', (2, 3, 1)),
+    ('T6', (0, 0)),
     ('T7', 'Foo bar'),
     ('T8', 1),
     ('T9', asn1.EmbeddedPDV(data=b'0123', abstract=None, transfer=None)),
@@ -201,17 +201,17 @@ def test_serialization(asn1_def, encoding, name, value):
     ('T1', ('item2', [True, False, True])),
     ('T2', {'item1': True, 'item2': 100, 'item3': [True, False, True]}),
     ('T3', [1, 2, 3, 4]),
-    ('T4', {'item1': b'0123', 'item2': None, 'item3': [1, 2, 3]}),
+    ('T4', {'item1': b'0123', 'item2': None, 'item3': (1, 2, 3)}),
     ('T5', [1, 2, 3, 4]),
     ('T6', {'item1': 'foo', 'item2': 0,
             'item3': asn1.EmbeddedPDV(None, None, b'0')}),
     ('T7', {'item1': True,
             'item2': asn1.External(b'0123', None, None),
             'item3': 12}),
-    ('T8', {'item1': {'item1': b'0123', 'item2': None, 'item3': [1, 2, 3]},
+    ('T8', {'item1': {'item1': b'0123', 'item2': None, 'item3': (1, 2, 3)},
             'item2': {'item1': 'foo', 'item2': 0,
                       'item3': asn1.EmbeddedPDV(None, None, b'0')}}),
-    ('T8', {'item1': {'item1': b'0123', 'item2': None, 'item3': [1, 2, 3]}}),
+    ('T8', {'item1': {'item1': b'0123', 'item2': None, 'item3': (1, 2, 3)}}),
 ])
 def test_serialization_composite(asn1_def, encoding, name, value):
     encoder = get_encoder(asn1.Repository(asn1_def), encoding)
@@ -249,7 +249,7 @@ def test_serialization_entity(encoding, sequence_size):
 
 @pytest.mark.parametrize("encoding", list(asn1.Encoding))
 @pytest.mark.parametrize("data_type", ["entity", "bytes", "bitstring"])
-@pytest.mark.parametrize("direct_ref", [None, [1, 5, 2, 3, 8]])
+@pytest.mark.parametrize("direct_ref", [None, (1, 5, 2, 3, 8)])
 @pytest.mark.parametrize("indirect_ref", [None, 11])
 def test_serialization_external(encoding, data_type, direct_ref, indirect_ref):
     encoder = get_encoder(asn1.Repository("""
@@ -275,10 +275,10 @@ def test_serialization_external(encoding, data_type, direct_ref, indirect_ref):
 
 
 @pytest.mark.parametrize("encoding", list(asn1.Encoding))
-@pytest.mark.parametrize("abstract", [None, 5, [1, 3, 8]])
-@pytest.mark.parametrize("transfer", [None, [1, 6, 3]])
+@pytest.mark.parametrize("abstract", [None, 5, (1, 3, 8)])
+@pytest.mark.parametrize("transfer", [None, (1, 6, 3)])
 def test_serialization_embedded_pdv(encoding, abstract, transfer):
-    if isinstance(abstract, list) and transfer is None:
+    if isinstance(abstract, tuple) and transfer is None:
         return
 
     encoder = get_encoder(asn1.Repository("""
@@ -397,19 +397,6 @@ def test_constructed_as_bit_string(encoding):
     assert encoder.decode_value('Module', 'T2', entity) == (
         [False, False, False, False, False, True, False, True] +
         [False, False, False, False, True, True, True, True])
-
-
-@pytest.mark.parametrize("oid1,oid2,expected", [
-    ([1, 2, 3], [1, 2, 3], True),
-    ([1, ('a', 2), 3], [1, 2, 3], True),
-    ([1, 2, 3], [1, 2, ('b', 3)], True),
-    ([('c', 1), 2, 3], [1, 2, ('d', 3)], True),
-    ([('e', 1), 2, 3], [('f', 1), 2, 3], True),
-    ([1, 2, 3], [1, 2], False),
-    ([1, 2, 3], [1, 4, 3], False),
-])
-def test_is_oid_eq(oid1, oid2, expected):
-    assert asn1.is_oid_eq(oid1, oid2) is expected
 
 
 def test_example_docs():

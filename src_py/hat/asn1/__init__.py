@@ -3,43 +3,43 @@
 Value mapping
 -------------
 
-    +-----------------------+------------------+
-    | ASN.1 type            | Python type      |
-    +=======================+==================+
-    | Boolean               | bool             |
-    +-----------------------+------------------+
-    | Integer               | int              |
-    +-----------------------+------------------+
-    | BitString             | List[bool]       |
-    +-----------------------+------------------+
-    | OctetString           | bytes            |
-    +-----------------------+------------------+
-    | Null                  | NoneType         |
-    +-----------------------+------------------+
-    | ObjectIdentifier      | List[int]        |
-    +-----------------------+------------------+
-    | String                | str              |
-    +-----------------------+------------------+
-    | External              | External         |
-    +-----------------------+------------------+
-    | Real                  | float            |
-    +-----------------------+------------------+
-    | Enumerated            | int              |
-    +-----------------------+------------------+
-    | EmbeddedPDV           | EmbeddedPDV      |
-    +-----------------------+------------------+
-    | Choice                | Tuple[str,Value] |
-    +-----------------------+------------------+
-    | Set                   | Dict[str,Value]  |
-    +-----------------------+------------------+
-    | SetOf                 | Iterable[Value]  |
-    +-----------------------+------------------+
-    | Sequence              | Dict[str,Value]  |
-    +-----------------------+------------------+
-    | SequenceOf            | List[Value]      |
-    +-----------------------+------------------+
-    | ABSTRACT-SYNTAX.&Type | Entity           |
-    +-----------------------+------------------+
+    +-----------------------+-------------------+
+    | ASN.1 type            | Python type       |
+    +=======================+===================+
+    | Boolean               | bool              |
+    +-----------------------+-------------------+
+    | Integer               | int               |
+    +-----------------------+-------------------+
+    | BitString             | List[bool]        |
+    +-----------------------+-------------------+
+    | OctetString           | Bytes             |
+    +-----------------------+-------------------+
+    | Null                  | NoneType          |
+    +-----------------------+-------------------+
+    | ObjectIdentifier      | Tuple[int, ...]   |
+    +-----------------------+-------------------+
+    | String                | str               |
+    +-----------------------+-------------------+
+    | External              | External          |
+    +-----------------------+-------------------+
+    | Real                  | float             |
+    +-----------------------+-------------------+
+    | Enumerated            | int               |
+    +-----------------------+-------------------+
+    | EmbeddedPDV           | EmbeddedPDV       |
+    +-----------------------+-------------------+
+    | Choice                | Tuple[str, Value] |
+    +-----------------------+-------------------+
+    | Set                   | Dict[str, Value]  |
+    +-----------------------+-------------------+
+    | SetOf                 | Iterable[Value]   |
+    +-----------------------+-------------------+
+    | Sequence              | Dict[str, Value]  |
+    +-----------------------+-------------------+
+    | SequenceOf            | List[Value]       |
+    +-----------------------+-------------------+
+    | ABSTRACT-SYNTAX.&Type | Entity            |
+    +-----------------------+-------------------+
 
 For Choice, Set and Sequence, `str` represents field name.
 
@@ -53,8 +53,7 @@ from hat import json
 from hat.asn1 import ber
 from hat.asn1 import common
 from hat.asn1 import doc
-from hat.asn1.common import (Data,
-                             Value,
+from hat.asn1.common import (Bytes,
                              Boolean,
                              Integer,
                              BitString,
@@ -72,11 +71,10 @@ from hat.asn1.common import (Data,
                              Sequence,
                              SequenceOf,
                              Entity,
-                             is_oid_eq)
+                             Value)
 
 
-__all__ = ['Data',
-           'Value',
+__all__ = ['Bytes',
            'Boolean',
            'Integer',
            'BitString',
@@ -94,13 +92,14 @@ __all__ = ['Data',
            'Sequence',
            'SequenceOf',
            'Entity',
-           'is_oid_eq',
+           'Value',
            'Encoding',
            'Encoder',
            'Repository']
 
 
-Encoding = enum.Enum('Encoding', ['BER'])
+class Encoding(enum.Enum):
+    BER = (2, 1, 1)  # (joint-iso-itu-t, asn1, basic-encoding)
 
 
 class Repository:
@@ -130,13 +129,17 @@ class Repository:
                                            str,
                                            'Repository']):
         self._refs = {}
+
         for arg in args:
             if isinstance(arg, pathlib.PurePath):
                 self._load_path(arg)
+
             elif isinstance(arg, str):
                 self._parse_asn1_def(arg)
+
             elif isinstance(arg, Repository):
                 self._refs.update(arg._refs)
+
             else:
                 raise ValueError('invalid argument')
 
@@ -146,6 +149,7 @@ class Repository:
         """Create repository from JSON data representation"""
         if isinstance(data, pathlib.PurePath):
             data = json.decode_file(data)
+
         repo = Repository()
         repo._refs = {common.type_from_json(k): common.type_from_json(v)
                       for k, v in data}
@@ -163,8 +167,7 @@ class Repository:
     def _load_path(self, path):
         paths = [path] if path.suffix == '.asn' else path.rglob('*.asn')
         for path in paths:
-            with open(path, 'r', encoding='utf-8') as f:
-                asn1_def = f.read()
+            asn1_def = path.read_text(encoding='utf-8')
             self._parse_asn1_def(asn1_def)
 
     def _parse_asn1_def(self, asn1_def):
@@ -185,15 +188,13 @@ class Encoder:
     @property
     def syntax_name(self) -> ObjectIdentifier:
         """Encoder syntax name"""
-        if self._encoding == Encoding.BER:
-            return ber.syntax_name
-        raise ValueError('invalid encoding')
+        return self._encoding.value
 
     def encode(self,
                module: str,
                name: str,
                value: Value
-               ) -> Data:
+               ) -> Bytes:
         """Encode value to data"""
         entity = self.encode_value(module, name, value)
         data = self.encode_entity(entity)
@@ -202,8 +203,8 @@ class Encoder:
     def decode(self,
                module: str,
                name: str,
-               data: Data
-               ) -> typing.Tuple[Value, Data]:
+               data: Bytes
+               ) -> typing.Tuple[Value, Bytes]:
         """Decode value from data
 
         Returns value and remaining data.
@@ -223,6 +224,7 @@ class Encoder:
             return ber.encode_value(self._repository._refs,
                                     common.TypeRef(module, name),
                                     value)
+
         raise ValueError('invalid encoding')
 
     def decode_value(self,
@@ -235,19 +237,21 @@ class Encoder:
             return ber.decode_value(self._repository._refs,
                                     common.TypeRef(module, name),
                                     entity)
+
         raise ValueError('invalid encoding')
 
     def encode_entity(self,
                       entity: Entity
-                      ) -> Data:
+                      ) -> Bytes:
         """Encode entity to data"""
         if self._encoding == Encoding.BER:
             return ber.encode_entity(entity)
+
         raise ValueError('invalid encoding')
 
     def decode_entity(self,
-                      data: Data
-                      ) -> typing.Tuple[Entity, Data]:
+                      data: Bytes
+                      ) -> typing.Tuple[Entity, Bytes]:
         """Decode entity from data
 
         Returns entity and remaining data.
@@ -255,4 +259,5 @@ class Encoder:
         """
         if self._encoding == Encoding.BER:
             return ber.decode_entity(data)
+
         raise ValueError('invalid encoding')

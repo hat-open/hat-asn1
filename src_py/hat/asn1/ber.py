@@ -1,5 +1,4 @@
 import collections
-import functools
 import itertools
 import math
 import typing
@@ -8,13 +7,8 @@ from hat import util
 from hat.asn1 import common
 
 
-syntax_name = [('joint-iso-itu-t', 2),
-               ('asn1', 1),
-               ('basic-encoding', 1)]
-
-
 class PrimitiveContent(typing.NamedTuple):
-    value: common.Data
+    value: common.Bytes
 
 
 class ConstructedContent(typing.NamedTuple):
@@ -39,48 +33,59 @@ def encode_value(refs: typing.Dict[common.TypeRef, common.Type],
         t = refs[t]
 
     if isinstance(t, common.BooleanType):
-        return Entity(common.ClassType.UNIVERSAL, 1,
-                      _encode_boolean(value))
+        return Entity(class_type=common.ClassType.UNIVERSAL,
+                      tag_number=1,
+                      content=_encode_boolean(value))
 
     if isinstance(t, common.IntegerType):
-        return Entity(common.ClassType.UNIVERSAL, 2,
-                      _encode_integer(value))
+        return Entity(class_type=common.ClassType.UNIVERSAL,
+                      tag_number=2,
+                      content=_encode_integer(value))
 
     if isinstance(t, common.BitStringType):
-        return Entity(common.ClassType.UNIVERSAL, 3,
-                      _encode_bitstring(value))
+        return Entity(class_type=common.ClassType.UNIVERSAL,
+                      tag_number=3,
+                      content=_encode_bitstring(value))
 
     if isinstance(t, common.OctetStringType):
-        return Entity(common.ClassType.UNIVERSAL, 4,
-                      _encode_octetstring(value))
+        return Entity(class_type=common.ClassType.UNIVERSAL,
+                      tag_number=4,
+                      content=_encode_octetstring(value))
 
     if isinstance(t, common.NullType):
-        return Entity(common.ClassType.UNIVERSAL, 5,
-                      _encode_null())
+        return Entity(class_type=common.ClassType.UNIVERSAL,
+                      tag_number=5,
+                      content=_encode_null())
 
     if isinstance(t, common.ObjectIdentifierType):
-        return Entity(common.ClassType.UNIVERSAL, 6,
-                      _encode_objectidentifier(value))
+        return Entity(class_type=common.ClassType.UNIVERSAL,
+                      tag_number=6,
+                      content=_encode_objectidentifier(value))
 
     if isinstance(t, common.StringType):
-        return Entity(common.ClassType.UNIVERSAL, t.value,
-                      _encode_string(value))
+        return Entity(class_type=common.ClassType.UNIVERSAL,
+                      tag_number=t.value,
+                      content=_encode_string(value))
 
     if isinstance(t, common.ExternalType):
-        return Entity(common.ClassType.UNIVERSAL, 8,
-                      _encode_external(value))
+        return Entity(class_type=common.ClassType.UNIVERSAL,
+                      tag_number=8,
+                      content=_encode_external(value))
 
     if isinstance(t, common.RealType):
-        return Entity(common.ClassType.UNIVERSAL, 9,
-                      _encode_real(value))
+        return Entity(class_type=common.ClassType.UNIVERSAL,
+                      tag_number=9,
+                      content=_encode_real(value))
 
     if isinstance(t, common.EnumeratedType):
-        return Entity(common.ClassType.UNIVERSAL, 10,
-                      _encode_integer(value))
+        return Entity(class_type=common.ClassType.UNIVERSAL,
+                      tag_number=10,
+                      content=_encode_integer(value))
 
     if isinstance(t, common.EmbeddedPDVType):
-        return Entity(common.ClassType.UNIVERSAL, 11,
-                      _encode_embeddedpdv(value))
+        return Entity(class_type=common.ClassType.UNIVERSAL,
+                      tag_number=11,
+                      content=_encode_embeddedpdv(value))
 
     if isinstance(t, common.ChoiceType):
         name, subvalue = value
@@ -88,24 +93,28 @@ def encode_value(refs: typing.Dict[common.TypeRef, common.Type],
         return encode_value(refs, prop.type, subvalue)
 
     if isinstance(t, common.SetType):
-        return Entity(common.ClassType.UNIVERSAL, 17,
-                      ConstructedContent(list(
-                        _encode_elements(refs, t.elements, value))))
+        elements = list(_encode_elements(refs, t.elements, value))
+        return Entity(class_type=common.ClassType.UNIVERSAL,
+                      tag_number=17,
+                      content=ConstructedContent(elements))
 
     if isinstance(t, common.SetOfType):
-        return Entity(common.ClassType.UNIVERSAL, 17,
-                      ConstructedContent([encode_value(refs, t.type, i)
-                                          for i in value]))
+        elements = [encode_value(refs, t.type, i) for i in value]
+        return Entity(class_type=common.ClassType.UNIVERSAL,
+                      tag_number=17,
+                      content=ConstructedContent(elements))
 
     if isinstance(t, common.SequenceType):
-        return Entity(common.ClassType.UNIVERSAL, 16,
-                      ConstructedContent(list(
-                        _encode_elements(refs, t.elements, value))))
+        elements = list(_encode_elements(refs, t.elements, value))
+        return Entity(class_type=common.ClassType.UNIVERSAL,
+                      tag_number=16,
+                      content=ConstructedContent(elements))
 
     if isinstance(t, common.SequenceOfType):
-        return Entity(common.ClassType.UNIVERSAL, 16,
-                      ConstructedContent([encode_value(refs, t.type, i)
-                                          for i in value]))
+        elements = [encode_value(refs, t.type, i) for i in value]
+        return Entity(class_type=common.ClassType.UNIVERSAL,
+                      tag_number=16,
+                      content=ConstructedContent(elements))
 
     if isinstance(t, common.EntityType):
         return value
@@ -115,13 +124,11 @@ def encode_value(refs: typing.Dict[common.TypeRef, common.Type],
 
     if isinstance(t, common.PrefixedType):
         entity = encode_value(refs, t.type, value)
-        if t.implicit:
-            entity = entity._replace(class_type=t.class_type,
-                                     tag_number=t.tag_number)
-        else:
-            entity = Entity(t.class_type, t.tag_number,
-                            ConstructedContent([entity]))
-        return entity
+        content = (entity.content if t.implicit
+                   else ConstructedContent([entity]))
+        return Entity(class_type=t.class_type,
+                      tag_number=t.tag_number,
+                      content=content)
 
     raise ValueError('invalid type definition')
 
@@ -170,39 +177,51 @@ def decode_value(refs: typing.Dict[common.TypeRef, common.Type],
     if isinstance(t, common.ChoiceType):
         for prop in t.choices:
             if _match_type_entity(refs, prop.type, entity):
-                return prop.name, decode_value(refs, prop.type, entity)
+                value = decode_value(refs, prop.type, entity)
+                return prop.name, value
+
         raise ValueError('invalid choice')
 
     if isinstance(t, common.SetType):
         value = {}
         elements = list(entity.content.elements)
+
         for prop in t.elements:
-            match = functools.partial(_match_type_entity, refs, prop.type)
-            subentity = util.first(elements,  match)
-            if not subentity:
+            for i, element in enumerate(elements):
+                if _match_type_entity(refs, prop.type, element):
+                    break
+
+            else:
                 if prop.optional:
                     continue
                 raise ValueError(f'missing property {prop.name}')
-            value[prop.name] = decode_value(refs, prop.type, subentity)
-            elements.remove(subentity)
+
+            value[prop.name] = decode_value(refs, prop.type, element)
+            del elements[i]
+
         return value
 
     if isinstance(t, common.SetOfType):
-        return [decode_value(refs, t.type, i) for i in entity.content.elements]
+        return [decode_value(refs, t.type, i)
+                for i in entity.content.elements]
 
     if isinstance(t, common.SequenceType):
         value = {}
         elements = collections.deque(entity.content.elements)
+
         for prop in t.elements:
             if elements and _match_type_entity(refs, prop.type, elements[0]):
                 value[prop.name] = decode_value(refs, prop.type,
                                                 elements.popleft())
+
             elif not prop.optional:
                 raise ValueError(f'missing property {prop.name}')
+
         return value
 
     if isinstance(t, common.SequenceOfType):
-        return [decode_value(refs, t.type, i) for i in entity.content.elements]
+        return [decode_value(refs, t.type, i)
+                for i in entity.content.elements]
 
     if isinstance(t, common.EntityType):
         return entity
@@ -211,57 +230,57 @@ def decode_value(refs: typing.Dict[common.TypeRef, common.Type],
         raise NotImplementedError()
 
     if isinstance(t, common.PrefixedType):
-        return decode_value(refs, t.type,
-                            entity if t.implicit
-                            else entity.content.elements[0])
+        subentity = entity if t.implicit else entity.content.elements[0]
+        return decode_value(refs, t.type, subentity)
 
     raise ValueError('invalid type definition')
 
 
-def encode_entity(entity: Entity) -> common.Data:
+def encode_entity(entity: Entity) -> common.Bytes:
     """Encode entity"""
     is_primitive = isinstance(entity.content, PrimitiveContent)
     is_constructed = isinstance(entity.content, ConstructedContent)
-    entity_bytes = []
+    entity_bytes = collections.deque()
 
-    next_byte = 0
-    next_byte |= (entity.class_type.value << 6)
-    next_byte |= (is_constructed << 5)
+    next_byte = (entity.class_type.value << 6) | (is_constructed << 5)
     if entity.tag_number <= 30:
         next_byte |= entity.tag_number
         entity_bytes.append(next_byte)
+
     else:
         next_byte |= 0x1F
         entity_bytes.append(next_byte)
+
         tag_number = entity.tag_number
-        next_bytes = [tag_number & 0x7F]
+        next_bytes = collections.deque([tag_number & 0x7F])
+
         tag_number >>= 7
         while tag_number > 0:
             next_byte = tag_number & 0x7F
-            next_bytes.insert(0, 0x80 | next_byte)
+            next_bytes.appendleft(0x80 | next_byte)
             tag_number >>= 7
+
         entity_bytes.extend(next_bytes)
 
     if is_primitive:
         length = len(entity.content.value)
         entity_bytes.extend(_encode_entity_length(length))
         entity_bytes.extend(entity.content.value)
+
     elif is_constructed:
-        length = 0
-        next_bytes = []
-        for entity in entity.content.elements:
-            subentity_bytes = encode_entity(entity)
-            length += len(subentity_bytes)
-            next_bytes.extend(subentity_bytes)
-        entity_bytes.extend(_encode_entity_length(length))
+        next_bytes = collections.deque(itertools.chain.from_iterable(
+            encode_entity(entity)
+            for entity in entity.content.elements))
+        entity_bytes.extend(_encode_entity_length(len(next_bytes)))
         entity_bytes.extend(next_bytes)
+
     else:
         raise ValueError('invalid entity content')
 
     return bytes(entity_bytes)
 
 
-def decode_entity(data: common.Data) -> typing.Tuple[Entity, common.Data]:
+def decode_entity(data: common.Bytes) -> typing.Tuple[Entity, common.Bytes]:
     """Decode entity
 
     Returns entity and remaining data.
@@ -287,31 +306,39 @@ def decode_entity(data: common.Data) -> typing.Tuple[Entity, common.Data]:
     if length == 0x80:
         if not is_constructed:
             raise ValueError('invalid primitive content length')
-        content = ConstructedContent([])
+
+        elements = collections.deque()
         while data[:2] != b'\x00\x00':
             subentity, data = decode_entity(data)
-            content.elements.append(subentity)
+            elements.append(subentity)
+
         data = data[2:]
-        entity = Entity(class_type, tag_number, content)
+        content = ConstructedContent(list(elements))
+        entity = Entity(class_type=class_type,
+                        tag_number=tag_number,
+                        content=content)
+
         return entity, data
 
     if length & 0x80:
-        length, data = (
-            int.from_bytes(data[:(length & 0x7F)], 'big'),
-            data[(length & 0x7F):])
+        length, data = (int.from_bytes(data[:(length & 0x7F)], 'big'),
+                        data[(length & 0x7F):])
 
-    content_bytes = data[:length]
-    data = data[length:]
+    content_bytes, data = data[:length], data[length:]
 
     if is_constructed:
-        content = ConstructedContent([])
+        elements = collections.deque()
         while content_bytes:
             subentity, content_bytes = decode_entity(content_bytes)
-            content.elements.append(subentity)
+            elements.append(subentity)
+        content = ConstructedContent(list(elements))
+
     else:
         content = PrimitiveContent(content_bytes)
 
-    entity = Entity(class_type, tag_number, content)
+    entity = Entity(class_type=class_type,
+                    tag_number=tag_number,
+                    content=content)
     return entity, data
 
 
@@ -319,11 +346,12 @@ def _encode_elements(refs, props, value):
     for prop in props:
         if prop.optional and prop.name not in value:
             continue
+
         yield encode_value(refs, prop.type, value[prop.name])
 
 
 def _encode_boolean(value):
-    return PrimitiveContent(bytes([0x01 if value else 0x00]))
+    return PrimitiveContent(b'\x01' if value else b'\x00')
 
 
 def _decode_boolean(content):
@@ -343,13 +371,13 @@ def _decode_integer(content):
 
 
 def _encode_bitstring(value):
-    unused_bits = (8 - len(value) % 8) % 8
-    content_bytes = [unused_bits]
+    content_bytes = collections.deque()
+    content_bytes.append((8 - len(value) % 8) % 8)
     for i, bit in enumerate(value):
         if i % 8 == 0:
             content_bytes.append(0)
         if bit:
-            content_bytes[-1] |= (1 << (7 - i % 8))
+            content_bytes.append(content_bytes.pop() | (1 << (7 - i % 8)))
     return PrimitiveContent(bytes(content_bytes))
 
 
@@ -357,22 +385,22 @@ def _decode_bitstring(content):
     if isinstance(content, PrimitiveContent):
         unused_bits = content.value[0]
         value = content.value[1:]
-        bitstring = []
+        bitstring = collections.deque()
         for byte in value:
             for i in range(8):
                 if (byte << i) & 0x80:
                     bitstring.append(True)
                 else:
                     bitstring.append(False)
+        bitstring = list(bitstring)
         if unused_bits:
             bitstring = bitstring[:-unused_bits]
         return bitstring
 
     if isinstance(content, ConstructedContent):
-        bitstring = []
-        for subentity in content.elements:
-            bitstring.extend(_decode_bitstring(subentity.content))
-        return bitstring
+        return list(itertools.chain.from_iterable(
+            _decode_bitstring(subentity.content)
+            for subentity in content.elements))
 
     raise ValueError('invalid entity content')
 
@@ -387,7 +415,8 @@ def _decode_octetstring(content):
 
     if isinstance(content, ConstructedContent):
         return bytes(itertools.chain.from_iterable(
-            _decode_octetstring(i.content) for i in content.elements))
+            _decode_octetstring(i.content)
+            for i in content.elements))
 
     raise ValueError('invalid entity content')
 
@@ -397,32 +426,40 @@ def _encode_null():
 
 
 def _encode_objectidentifier(value):
-    value = [i if isinstance(i, int) else i[1] for i in value]
     if len(value) < 2:
         raise ValueError('invalid object identifier')
+
     if value[0] > 2:
         raise ValueError('invalid object identifier')
+
     if value[0] < 2 and value[1] > 39:
         raise ValueError('invalid object identifier')
-    value = [40 * value[0] + value[1], *value[2:]]
-    content_bytes = []
-    for id in value:
-        id_bytes = collections.deque()
-        while id:
-            id_bytes.appendleft(0x80 | (id & 0x7F))
-            id >>= 7
-        if not id_bytes:
-            id_bytes.appendleft(0)
+
+    value = collections.deque(value)
+    head = 40 * value.popleft()
+    head += value.popleft()
+    value.appendleft(head)
+
+    content_bytes = collections.deque()
+    for i in value:
+        i_bytes = collections.deque()
+        while i:
+            i_bytes.appendleft(0x80 | (i & 0x7F))
+            i >>= 7
+        if not i_bytes:
+            i_bytes.appendleft(0)
         else:
-            id_bytes.append(id_bytes.pop() & 0x7F)
-        content_bytes.extend(id_bytes)
+            i_bytes.append(i_bytes.pop() & 0x7F)
+        content_bytes.extend(i_bytes)
+
     return PrimitiveContent(bytes(content_bytes))
 
 
 def _decode_objectidentifier(content):
     if len(content.value) < 1:
         raise ValueError('invalid object identifier')
-    ids = []
+
+    ids = collections.deque()
     next_id = 0
     for byte in content.value:
         next_id <<= 7
@@ -430,12 +467,15 @@ def _decode_objectidentifier(content):
         if not (byte & 0x80):
             ids.append(next_id)
             next_id = 0
+
     if len(ids) < 1:
         raise ValueError('invalid object identifier')
-    first_id = min(ids[0] // 40, 2)
-    second_id = ids[0] % 40 if first_id < 2 else ids[0] - 2 * 40
-    ids = [first_id, second_id, *ids[1:]]
-    return ids
+
+    head = ids.popleft()
+    first_id = min(head // 40, 2)
+    second_id = head % 40 if first_id < 2 else head - 2 * 40
+
+    return (first_id, second_id, *ids)
 
 
 def _encode_string(value):
@@ -453,7 +493,7 @@ def _decode_string(content):
 
 
 def _encode_external(value):
-    elements = []
+    elements = collections.deque()
 
     if value.direct_ref is not None:
         entity = Entity(common.ClassType.UNIVERSAL, 6,
@@ -468,7 +508,7 @@ def _encode_external(value):
     if isinstance(value.data, Entity):
         entity = Entity(common.ClassType.CONTEXT_SPECIFIC, 0,
                         ConstructedContent([value.data]))
-    elif _is_data(value.data):
+    elif isinstance(value.data, (bytes, bytearray, memoryview)):
         entity = Entity(common.ClassType.CONTEXT_SPECIFIC, 1,
                         _encode_octetstring(value.data))
     else:
@@ -476,7 +516,7 @@ def _encode_external(value):
                         _encode_bitstring(value.data))
     elements.append(entity)
 
-    return ConstructedContent(elements)
+    return ConstructedContent(list(elements))
 
 
 def _decode_external(content):
@@ -586,17 +626,16 @@ def _decode_embeddedpdv(content):
 
 
 def _encode_entity_length(length):
-    length_bytes = []
     if length <= 127:
-        length_bytes.append(length)
-    else:
-        next_bytes = _uint_to_bebytes(length)
-        if len(next_bytes) > 0x7E:
-            raise ValueError('invalid length')
-        next_byte = 0x80 | len(next_bytes)
-        length_bytes.insert(0, next_byte)
-        length_bytes.extend(next_bytes)
-    return bytes(length_bytes)
+        yield length
+        return
+
+    size = max(math.ceil(length.bit_length() / 8), 1)
+    if size > 0x7E:
+        raise ValueError('invalid length')
+
+    yield 0x80 | size
+    yield from length.to_bytes(size, 'big')
 
 
 def _match_type_entity(refs, t, entity):
@@ -671,12 +710,3 @@ def _match_type_entity(refs, t, entity):
                 entity.tag_number == t.tag_number)
 
     raise ValueError('invalid type definition')
-
-
-def _uint_to_bebytes(x):
-    bytes_len = max(math.ceil(x.bit_length() / 8), 1)
-    return x.to_bytes(bytes_len, 'big')
-
-
-def _is_data(x):
-    return any(isinstance(x, i) for i in (bytes, bytearray, memoryview))

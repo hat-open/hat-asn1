@@ -14,49 +14,49 @@ Python data mappings
 
 Mapping between ASN.1 data types and built in types:
 
-    +-----------------------+------------------+
-    | ASN.1 type            | Python type      |
-    +=======================+==================+
-    | Boolean               | bool             |
-    +-----------------------+------------------+
-    | Integer               | int              |
-    +-----------------------+------------------+
-    | BitString             | List[bool]       |
-    +-----------------------+------------------+
-    | OctetString           | bytes            |
-    +-----------------------+------------------+
-    | Null                  | ``None``         |
-    +-----------------------+------------------+
-    | ObjectIdentifier      | List[int]        |
-    +-----------------------+------------------+
-    | String                | str              |
-    +-----------------------+------------------+
-    | External              | External         |
-    +-----------------------+------------------+
-    | Real                  | float            |
-    +-----------------------+------------------+
-    | Enumerated            | int              |
-    +-----------------------+------------------+
-    | EmbeddedPDV           | EmbeddedPDV      |
-    +-----------------------+------------------+
-    | Choice                | Tuple[str,Value] |
-    +-----------------------+------------------+
-    | Set                   | Dict[str,Value]  |
-    +-----------------------+------------------+
-    | SetOf                 | Iterable[Value]  |
-    +-----------------------+------------------+
-    | Sequence              | Dict[str,Value]  |
-    +-----------------------+------------------+
-    | SequenceOf            | List[Value]      |
-    +-----------------------+------------------+
-    | ABSTRACT-SYNTAX.&Type | Entity           |
-    +-----------------------+------------------+
+    +-----------------------+-------------------+
+    | ASN.1 type            | Python type       |
+    +=======================+===================+
+    | Boolean               | bool              |
+    +-----------------------+-------------------+
+    | Integer               | int               |
+    +-----------------------+-------------------+
+    | BitString             | List[bool]        |
+    +-----------------------+-------------------+
+    | OctetString           | Bytes             |
+    +-----------------------+-------------------+
+    | Null                  | NoneType          |
+    +-----------------------+-------------------+
+    | ObjectIdentifier      | Tuple[int, ...]   |
+    +-----------------------+-------------------+
+    | String                | str               |
+    +-----------------------+-------------------+
+    | External              | External          |
+    +-----------------------+-------------------+
+    | Real                  | float             |
+    +-----------------------+-------------------+
+    | Enumerated            | int               |
+    +-----------------------+-------------------+
+    | EmbeddedPDV           | EmbeddedPDV       |
+    +-----------------------+-------------------+
+    | Choice                | Tuple[str, Value] |
+    +-----------------------+-------------------+
+    | Set                   | Dict[str, Value]  |
+    +-----------------------+-------------------+
+    | SetOf                 | Iterable[Value]   |
+    +-----------------------+-------------------+
+    | Sequence              | Dict[str, Value]  |
+    +-----------------------+-------------------+
+    | SequenceOf            | List[Value]       |
+    +-----------------------+-------------------+
+    | ABSTRACT-SYNTAX.&Type | Entity            |
+    +-----------------------+-------------------+
 
 For Choice, Set and Sequence, `str` represents field name.
 
 According to previous mapping, this library defines following types::
 
-    Data = typing.Union[bytes, bytearray, memoryview]
+    Bytes = typing.Union[bytes, bytearray, memoryview]
 
     Value = typing.Union['Boolean',
                          'Integer',
@@ -79,9 +79,9 @@ According to previous mapping, this library defines following types::
     Boolean = bool
     Integer = int
     BitString = typing.List[bool]
-    OctetString = bytes
+    OctetString = Bytes
     Null = None
-    ObjectIdentifier = typing.List[typing.Union[int, typing.Tuple[str, int]]]
+    ObjectIdentifier = typing.Tuple[int, ...]
     String = str
     Real = float
     Enumerated = int
@@ -160,13 +160,13 @@ based on ASN.1 data definitions parsed by `hat.asn1.Repository`::
                    module: str,
                    name: str,
                    value: Value
-                   ) -> Data: ...
+                   ) -> Bytes: ...
 
         def decode(self,
                    module: str,
                    name: str,
-                   data: Data
-                   ) -> typing.Tuple[Value, Data]: ...
+                   data: Bytes
+                   ) -> typing.Tuple[Value, Bytes]: ...
 
         def encode_value(self,
                          module: str,
@@ -182,11 +182,11 @@ based on ASN.1 data definitions parsed by `hat.asn1.Repository`::
 
         def encode_entity(self,
                           entity: Entity
-                          ) -> Data: ...
+                          ) -> Bytes: ...
 
         def decode_entity(self,
-                          data: Data
-                          ) -> typing.Tuple[Entity, Data]: ...
+                          data: Bytes
+                          ) -> typing.Tuple[Entity, Bytes]: ...
 
 
 Example

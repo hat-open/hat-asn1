@@ -6,6 +6,9 @@ from hat import json
 from hat import util
 
 
+Bytes = typing.Union[bytes, bytearray, memoryview]
+
+
 class ClassType(enum.Enum):
     UNIVERSAL = 0
     APPLICATION = 1
@@ -22,30 +25,6 @@ class TypeProperty(typing.NamedTuple):
 class TypeRef(typing.NamedTuple):
     module: str
     name: str
-
-
-Type = typing.Union[TypeRef,
-                    'BooleanType',
-                    'IntegerType',
-                    'BitStringType',
-                    'OctetStringType',
-                    'NullType',
-                    'ObjectIdentifierType',
-                    'StringType',
-                    'ExternalType',
-                    'RealType',
-                    'EnumeratedType',
-                    'EmbeddedPDVType',
-                    'ChoiceType',
-                    'SetType',
-                    'SetOfType',
-                    'SequenceType',
-                    'SequenceOfType',
-                    'EntityType',
-                    'UnsupportedType',
-                    'PrefixedType']
-"""Type"""
-util.register_type_alias('Type')
 
 
 class BooleanType(typing.NamedTuple):
@@ -115,7 +94,7 @@ class SetType(typing.NamedTuple):
 
 
 class SetOfType(typing.NamedTuple):
-    type: Type
+    type: 'Type'
     "elements type definition"
 
 
@@ -124,7 +103,7 @@ class SequenceType(typing.NamedTuple):
 
 
 class SequenceOfType(typing.NamedTuple):
-    type: Type
+    type: 'Type'
     "elements type definition"
 
 
@@ -137,36 +116,34 @@ class UnsupportedType(typing.NamedTuple):
 
 
 class PrefixedType(typing.NamedTuple):
-    type: Type
+    type: 'Type'
     class_type: ClassType
     tag_number: int
     implicit: bool
 
 
-Data = typing.Union[bytes, bytearray, memoryview]
-"""Data"""
-util.register_type_alias('Data')
-
-
-Value = typing.Union['Boolean',
-                     'Integer',
-                     'BitString',
-                     'OctetString',
-                     'Null',
-                     'ObjectIdentifier',
-                     'String',
-                     'External',
-                     'Real',
-                     'Enumerated',
-                     'EmbeddedPDV',
-                     'Choice',
-                     'Set',
-                     'SetOf',
-                     'Sequence',
-                     'SequenceOf',
-                     'Entity']
-"""Value"""
-util.register_type_alias('Value')
+Type = typing.Union[TypeRef,
+                    BooleanType,
+                    IntegerType,
+                    BitStringType,
+                    OctetStringType,
+                    NullType,
+                    ObjectIdentifierType,
+                    StringType,
+                    ExternalType,
+                    RealType,
+                    EnumeratedType,
+                    EmbeddedPDVType,
+                    ChoiceType,
+                    SetType,
+                    SetOfType,
+                    SequenceType,
+                    SequenceOfType,
+                    EntityType,
+                    UnsupportedType,
+                    PrefixedType]
+"""Type"""
+util.register_type_alias('Type')
 
 
 Boolean = bool
@@ -184,7 +161,7 @@ BitString = typing.List[bool]
 util.register_type_alias('BitString')
 
 
-OctetString = bytes
+OctetString = Bytes
 """Octet string"""
 util.register_type_alias('OctetString')
 
@@ -194,7 +171,7 @@ Null = None
 util.register_type_alias('Null')
 
 
-ObjectIdentifier = typing.List[typing.Union[int, typing.Tuple[str, int]]]
+ObjectIdentifier = typing.Tuple[int, ...]
 """Object identifier"""
 util.register_type_alias('ObjectIdentifier')
 
@@ -205,7 +182,7 @@ util.register_type_alias('String')
 
 
 class External(typing.NamedTuple):
-    data: typing.Union['Entity', Data, typing.List[bool]]
+    data: typing.Union['Entity', Bytes, typing.List[bool]]
     direct_ref: typing.Optional[ObjectIdentifier]
     indirect_ref: typing.Optional[int]
 
@@ -224,30 +201,30 @@ util.register_type_alias('Enumerated')
 class EmbeddedPDV(typing.NamedTuple):
     abstract: typing.Optional[typing.Union[int, ObjectIdentifier]]
     transfer: typing.Optional[ObjectIdentifier]
-    data: Data
+    data: Bytes
 
 
-Choice = typing.Tuple[str, Value]
+Choice = typing.Tuple[str, 'Value']
 """Choice"""
 util.register_type_alias('Choice')
 
 
-Set = typing.Dict[str, Value]
+Set = typing.Dict[str, 'Value']
 """Set"""
 util.register_type_alias('Set')
 
 
-SetOf = typing.Iterable[Value]
+SetOf = typing.Iterable['Value']
 """Set of"""
 util.register_type_alias('SetOf')
 
 
-Sequence = typing.Dict[str, Value]
+Sequence = typing.Dict[str, 'Value']
 """Sequence"""
 util.register_type_alias('Sequence')
 
 
-SequenceOf = typing.List[Value]
+SequenceOf = typing.List['Value']
 """Sequence of"""
 util.register_type_alias('SequenceOf')
 
@@ -256,18 +233,25 @@ class Entity(abc.ABC):
     """Encoding independent ASN.1 Entity"""
 
 
-def is_oid_eq(x: ObjectIdentifier,
-              y: ObjectIdentifier
-              ) -> bool:
-    """Check if two ASN.1 object identifiers are equal"""
-    if len(x) != len(y):
-        return False
-    for i, j in zip(x, y):
-        i_id = i if isinstance(i, int) else i[1]
-        j_id = j if isinstance(j, int) else j[1]
-        if i_id != j_id:
-            return False
-    return True
+Value = typing.Union[Boolean,
+                     Integer,
+                     BitString,
+                     OctetString,
+                     Null,
+                     ObjectIdentifier,
+                     String,
+                     External,
+                     Real,
+                     Enumerated,
+                     EmbeddedPDV,
+                     Choice,
+                     Set,
+                     SetOf,
+                     Sequence,
+                     SequenceOf,
+                     Entity]
+"""Value"""
+util.register_type_alias('Value')
 
 
 def type_to_json(t: Type) -> json.Data:

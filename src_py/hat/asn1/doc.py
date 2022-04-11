@@ -50,7 +50,7 @@ _style = """
 """
 
 
-_optional = ' <span style="color: red">&#9773;</span>'
+_optional = ' <span style="color: red">*</span>'
 
 
 def _generate_module_toc(module_name, refs):
