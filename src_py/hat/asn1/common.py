@@ -143,42 +143,34 @@ Type = typing.Union[TypeRef,
                     UnsupportedType,
                     PrefixedType]
 """Type"""
-util.register_type_alias('Type')
 
 
 Boolean = bool
 """Boolean"""
-util.register_type_alias('Boolean')
 
 
 Integer = int
 """Integer"""
-util.register_type_alias('Integer')
 
 
 BitString = typing.List[bool]
 """Bit string"""
-util.register_type_alias('BitString')
 
 
 OctetString = Bytes
 """Octet string"""
-util.register_type_alias('OctetString')
 
 
 Null = None
 """Null"""
-util.register_type_alias('Null')
 
 
 ObjectIdentifier = typing.Tuple[int, ...]
 """Object identifier"""
-util.register_type_alias('ObjectIdentifier')
 
 
 String = str
 """String"""
-util.register_type_alias('String')
 
 
 class External(typing.NamedTuple):
@@ -189,12 +181,10 @@ class External(typing.NamedTuple):
 
 Real = float
 """Real"""
-util.register_type_alias('Real')
 
 
 Enumerated = int
 """Enumerated"""
-util.register_type_alias('Enumerated')
 
 
 # TODO: if abstract is ObjectIdentifier then transfer must be defined
@@ -206,27 +196,22 @@ class EmbeddedPDV(typing.NamedTuple):
 
 Choice = typing.Tuple[str, 'Value']
 """Choice"""
-util.register_type_alias('Choice')
 
 
 Set = typing.Dict[str, 'Value']
 """Set"""
-util.register_type_alias('Set')
 
 
 SetOf = typing.Iterable['Value']
 """Set of"""
-util.register_type_alias('SetOf')
 
 
 Sequence = typing.Dict[str, 'Value']
 """Sequence"""
-util.register_type_alias('Sequence')
 
 
 SequenceOf = typing.List['Value']
 """Sequence of"""
-util.register_type_alias('SequenceOf')
 
 
 class Entity(abc.ABC):
@@ -251,7 +236,6 @@ Value = typing.Union[Boolean,
                      SequenceOf,
                      Entity]
 """Value"""
-util.register_type_alias('Value')
 
 
 def type_to_json(t: Type) -> json.Data:
@@ -398,3 +382,22 @@ def type_from_json(data: json.Data) -> Type:
                             implicit=data[4])
 
     raise ValueError('invalid data')
+
+
+# HACK type alias
+util.register_type_alias('Type')
+util.register_type_alias('Boolean')
+util.register_type_alias('Integer')
+util.register_type_alias('BitString')
+util.register_type_alias('OctetString')
+util.register_type_alias('Null')
+util.register_type_alias('ObjectIdentifier')
+util.register_type_alias('String')
+util.register_type_alias('Real')
+util.register_type_alias('Enumerated')
+util.register_type_alias('Choice')
+util.register_type_alias('Set')
+util.register_type_alias('SetOf')
+util.register_type_alias('Sequence')
+util.register_type_alias('SequenceOf')
+util.register_type_alias('Value')
