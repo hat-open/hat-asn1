@@ -40,8 +40,7 @@ def task_build():
             name='hat-asn1',
             description='Hat ASN.1 parser and encoder',
             url='https://github.com/hat-open/hat-asn1',
-            license=common.License.APACHE2,
-            packages=['hat'])
+            license=common.License.APACHE2)
 
     return {'actions': [build]}
 
