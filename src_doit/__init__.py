@@ -4,8 +4,7 @@ from hat.doit import common
 from hat.doit.py import (build_wheel,
                          run_pytest,
                          run_flake8)
-from hat.doit.docs import (SphinxOutputType,
-                           build_sphinx,
+from hat.doit.docs import (build_sphinx,
                            build_pdoc)
 
 
@@ -59,8 +58,12 @@ def task_test():
 
 def task_docs():
     """Docs"""
-    return {'actions': [(build_sphinx, [SphinxOutputType.HTML,
-                                        docs_dir,
-                                        build_docs_dir]),
-                        (build_pdoc, ['hat.asn1',
-                                      build_docs_dir / 'py_api'])]}
+
+    def build():
+        build_sphinx(src_dir=docs_dir,
+                     dst_dir=build_docs_dir,
+                     project='hat-asn1')
+        build_pdoc(module='hat.asn1',
+                   dst_dir=build_docs_dir / 'py_api')
+
+    return {'actions': [build]}
