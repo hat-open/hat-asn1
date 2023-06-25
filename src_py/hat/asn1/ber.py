@@ -18,13 +18,13 @@ class ConstructedContent(typing.NamedTuple):
 class Entity(typing.NamedTuple):
     class_type: common.ClassType
     tag_number: int
-    content: typing.Union[PrimitiveContent, ConstructedContent]
+    content: PrimitiveContent | ConstructedContent
 
 
 common.Entity.register(Entity)
 
 
-def encode_value(refs: typing.Dict[common.TypeRef, common.Type],
+def encode_value(refs: dict[common.TypeRef, common.Type],
                  t: common.Type,
                  value: common.Value
                  ) -> Entity:
@@ -133,7 +133,7 @@ def encode_value(refs: typing.Dict[common.TypeRef, common.Type],
     raise ValueError('invalid type definition')
 
 
-def decode_value(refs: typing.Dict[common.TypeRef, common.Type],
+def decode_value(refs: dict[common.TypeRef, common.Type],
                  t: common.Type,
                  entity: Entity
                  ) -> common.Value:
@@ -280,7 +280,7 @@ def encode_entity(entity: Entity) -> common.Bytes:
     return bytes(entity_bytes)
 
 
-def decode_entity(data: common.Bytes) -> typing.Tuple[Entity, common.Bytes]:
+def decode_entity(data: common.Bytes) -> tuple[Entity, common.Bytes]:
     """Decode entity
 
     Returns entity and remaining data.

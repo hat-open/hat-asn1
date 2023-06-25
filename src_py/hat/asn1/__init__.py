@@ -144,7 +144,7 @@ class Repository:
                 raise ValueError('invalid argument')
 
     @staticmethod
-    def from_json(data: typing.Union[pathlib.PurePath, json.Data]
+    def from_json(data: pathlib.PurePath | json.Data
                   ) -> 'Repository':
         """Create repository from JSON data representation"""
         if isinstance(data, pathlib.PurePath):
@@ -251,7 +251,7 @@ class Encoder:
 
     def decode_entity(self,
                       data: Bytes
-                      ) -> typing.Tuple[Entity, Bytes]:
+                      ) -> tuple[Entity, Bytes]:
         """Decode entity from data
 
         Returns entity and remaining data.

@@ -3,10 +3,9 @@ import enum
 import typing
 
 from hat import json
-from hat import util
 
 
-Bytes = typing.Union[bytes, bytearray, memoryview]
+Bytes = bytes | bytearray | memoryview
 
 
 class ClassType(enum.Enum):
@@ -86,11 +85,11 @@ class EmbeddedPDVType(typing.NamedTuple):
 
 
 class ChoiceType(typing.NamedTuple):
-    choices: typing.List[TypeProperty]
+    choices: list[TypeProperty]
 
 
 class SetType(typing.NamedTuple):
-    elements: typing.List[TypeProperty]
+    elements: list[TypeProperty]
 
 
 class SetOfType(typing.NamedTuple):
@@ -99,7 +98,7 @@ class SetOfType(typing.NamedTuple):
 
 
 class SequenceType(typing.NamedTuple):
-    elements: typing.List[TypeProperty]
+    elements: list[TypeProperty]
 
 
 class SequenceOfType(typing.NamedTuple):
@@ -122,95 +121,99 @@ class PrefixedType(typing.NamedTuple):
     implicit: bool
 
 
-Type = typing.Union[TypeRef,
-                    BooleanType,
-                    IntegerType,
-                    BitStringType,
-                    OctetStringType,
-                    NullType,
-                    ObjectIdentifierType,
-                    StringType,
-                    ExternalType,
-                    RealType,
-                    EnumeratedType,
-                    EmbeddedPDVType,
-                    ChoiceType,
-                    SetType,
-                    SetOfType,
-                    SequenceType,
-                    SequenceOfType,
-                    EntityType,
-                    UnsupportedType,
-                    PrefixedType]
+Type: typing.TypeAlias = (TypeRef |
+                          BooleanType |
+                          IntegerType |
+                          BitStringType |
+                          OctetStringType |
+                          NullType |
+                          ObjectIdentifierType |
+                          StringType |
+                          ExternalType |
+                          RealType |
+                          EnumeratedType |
+                          EmbeddedPDVType |
+                          ChoiceType |
+                          SetType |
+                          SetOfType |
+                          SequenceType |
+                          SequenceOfType |
+                          EntityType |
+                          UnsupportedType |
+                          PrefixedType)
 """Type"""
 
 
-Boolean = bool
+Boolean: typing.TypeAlias = bool
 """Boolean"""
 
 
-Integer = int
+Integer: typing.TypeAlias = int
 """Integer"""
 
 
-BitString = typing.List[bool]
+BitString: typing.TypeAlias = list[bool]
 """Bit string"""
 
 
-OctetString = Bytes
+OctetString: typing.TypeAlias = Bytes
 """Octet string"""
 
 
-Null = None
+Null: typing.TypeAlias = None
 """Null"""
 
 
-ObjectIdentifier = typing.Tuple[int, ...]
+ObjectIdentifier: typing.TypeAlias = tuple[int, ...]
 """Object identifier"""
 
 
-String = str
+String: typing.TypeAlias = str
 """String"""
 
 
 class External(typing.NamedTuple):
-    data: typing.Union['Entity', Bytes, typing.List[bool]]
-    direct_ref: typing.Optional[ObjectIdentifier]
-    indirect_ref: typing.Optional[int]
+    data: typing.Union['Entity', Bytes, list[bool]]
+    direct_ref: ObjectIdentifier | None
+    indirect_ref: int | None
 
 
-Real = float
+Real: typing.TypeAlias = float
 """Real"""
 
 
-Enumerated = int
+Enumerated: typing.TypeAlias = int
 """Enumerated"""
 
 
-# TODO: if abstract is ObjectIdentifier then transfer must be defined
 class EmbeddedPDV(typing.NamedTuple):
-    abstract: typing.Optional[typing.Union[int, ObjectIdentifier]]
-    transfer: typing.Optional[ObjectIdentifier]
+    """EmbeddedPDV
+
+    If `abstract` is `ObjectIdentifier`, `transfer` must be defined
+
+    """
+    abstract: int | ObjectIdentifier | None
+    transfer: ObjectIdentifier | None
     data: Bytes
 
 
-Choice = typing.Tuple[str, 'Value']
+Choice: typing.TypeAlias = typing.Tuple[str, 'Value']
 """Choice"""
 
 
-Set = typing.Dict[str, 'Value']
+Set: typing.TypeAlias = typing.Dict[str, 'Value']
 """Set"""
 
 
-SetOf = typing.Iterable['Value']
+SetOf: typing.TypeAlias = typing.Iterable['Value']
 """Set of"""
 
 
-Sequence = typing.Dict[str, 'Value']
+Sequence: typing.TypeAlias = typing.Dict[str, 'Value']
 """Sequence"""
 
 
-SequenceOf = typing.List['Value']
+SequenceOf: typing.TypeAlias = typing.List['Value']
 """Sequence of"""
 
 
@@ -218,23 +221,23 @@ class Entity(abc.ABC):
     """Encoding independent ASN.1 Entity"""
 
 
-Value = typing.Union[Boolean,
-                     Integer,
-                     BitString,
-                     OctetString,
-                     Null,
-                     ObjectIdentifier,
-                     String,
-                     External,
-                     Real,
-                     Enumerated,
-                     EmbeddedPDV,
-                     Choice,
-                     Set,
-                     SetOf,
-                     Sequence,
-                     SequenceOf,
-                     Entity]
+Value: typing.TypeAlias = (Boolean |
+                           Integer |
+                           BitString |
+                           OctetString |
+                           Null |
+                           ObjectIdentifier |
+                           String |
+                           External |
+                           Real |
+                           Enumerated |
+                           EmbeddedPDV |
+                           Choice |
+                           Set |
+                           SetOf |
+                           Sequence |
+                           SequenceOf |
+                           Entity)
 """Value"""
 
 
@@ -382,22 +385,3 @@ def type_from_json(data: json.Data) -> Type:
                             implicit=data[4])
 
     raise ValueError('invalid data')
-
-
-# HACK type alias
-util.register_type_alias('Type')
-util.register_type_alias('Boolean')
-util.register_type_alias('Integer')
-util.register_type_alias('BitString')
-util.register_type_alias('OctetString')
-util.register_type_alias('Null')
-util.register_type_alias('ObjectIdentifier')
-util.register_type_alias('String')
-util.register_type_alias('Real')
-util.register_type_alias('Enumerated')
-util.register_type_alias('Choice')
-util.register_type_alias('Set')
-util.register_type_alias('SetOf')
-util.register_type_alias('Sequence')
-util.register_type_alias('SequenceOf')
-util.register_type_alias('Value')

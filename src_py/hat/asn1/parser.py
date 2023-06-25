@@ -1,5 +1,4 @@
 import itertools
-import typing
 
 from hat import util
 from hat import peg
@@ -7,7 +6,7 @@ from hat.asn1 import common
 
 
 def parse(asn1_def: str
-          ) -> typing.Dict[common.TypeRef, common.Type]:
+          ) -> dict[common.TypeRef, common.Type]:
     """Parse ASN.1"""
     ast = _grammar.parse(asn1_def)
     refs = peg.walk_ast(ast, _actions)

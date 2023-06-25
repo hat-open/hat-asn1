@@ -1,9 +1,7 @@
-import typing
-
 from hat.asn1 import common
 
 
-def generate_html(refs: typing.Dict[common.TypeRef, common.Type]
+def generate_html(refs: dict[common.TypeRef, common.Type]
                   ) -> str:
     """Generate HTML documentation"""
     modules = {}
