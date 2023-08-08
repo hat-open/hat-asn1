@@ -1,3 +1,0 @@
-hat-json ~= 0.5.19
-hat-peg ~= 0.5.7
-hat-util ~= 0.6.10

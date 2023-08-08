@@ -1,8 +1,9 @@
 from pathlib import Path
 
 from hat.doit import common
-from hat.doit.py import (build_wheel,
-                         run_pytest,
+from hat.doit.py import (get_task_build_wheel,
+                         get_task_run_pytest,
+                         get_task_run_pip_compile,
                          run_flake8)
 from hat.doit.docs import (build_sphinx,
                            build_pdoc)
@@ -12,7 +13,8 @@ __all__ = ['task_clean_all',
            'task_build',
            'task_check',
            'task_test',
-           'task_docs']
+           'task_docs',
+           'task_pip_compile']
 
 
 build_dir = Path('build')
@@ -31,17 +33,8 @@ def task_clean_all():
 
 def task_build():
     """Build"""
-
-    def build():
-        build_wheel(
-            src_dir=src_py_dir,
-            dst_dir=build_py_dir,
-            name='hat-asn1',
-            description='Hat ASN.1 parser and encoder',
-            url='https://github.com/hat-open/hat-asn1',
-            license=common.License.APACHE2)
-
-    return {'actions': [build]}
+    return get_task_build_wheel(src_dir=src_py_dir,
+                                build_dir=build_py_dir)
 
 
 def task_check():
@@ -52,8 +45,7 @@ def task_check():
 
 def task_test():
     """Test"""
-    return {'actions': [lambda args: run_pytest(pytest_dir, *(args or []))],
-            'pos_arg': 'args'}
+    return get_task_run_pytest()
 
 
 def task_docs():
@@ -67,3 +59,8 @@ def task_docs():
                    dst_dir=build_docs_dir / 'py_api')
 
     return {'actions': [build]}
+
+
+def task_pip_compile():
+    """Run pip-compile"""
+    return get_task_run_pip_compile()
