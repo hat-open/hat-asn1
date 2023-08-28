@@ -3,7 +3,7 @@ from pathlib import Path
 from hat.doit import common
 from hat.doit.py import (get_task_build_wheel,
                          get_task_run_pytest,
-                         get_task_run_pip_compile,
+                         get_task_create_pip_requirements,
                          run_flake8)
 from hat.doit.docs import (build_sphinx,
                            build_pdoc)
@@ -14,7 +14,7 @@ __all__ = ['task_clean_all',
            'task_check',
            'task_test',
            'task_docs',
-           'task_pip_compile']
+           'task_pip_requirements']
 
 
 build_dir = Path('build')
@@ -61,6 +61,6 @@ def task_docs():
     return {'actions': [build]}
 
 
-def task_pip_compile():
-    """Run pip-compile"""
-    return get_task_run_pip_compile()
+def task_pip_requirements():
+    """Create pip requirements"""
+    return get_task_create_pip_requirements()
