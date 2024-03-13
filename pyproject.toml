@@ -6,9 +6,9 @@ readme = "README.rst"
 requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
 dependencies = [
-    "hat-json ~= 0.5.19",
-    "hat-peg ~= 0.5.7",
-    "hat-util ~= 0.6.10",
+    "hat-json ~=0.5.25",
+    "hat-peg ~=0.5.7",
+    "hat-util ~=0.6.13",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -21,10 +21,10 @@ Repository = "https://github.com/hat-open/hat-asn1.git"
 Documentation = "http://hat-asn1.hat-open.com"
 
 [project.optional-dependencies]
-dev = ["hat-doit ~=0.15.4"]
+dev = ["hat-doit ~=0.15.11"]
 
 [build-system]
-requires = ["hat-doit ~=0.15.4"]
+requires = ["hat-doit ~=0.15.11"]
 build-backend = "hat.doit.pep517"
 
 [tool.pytest.ini_options]
