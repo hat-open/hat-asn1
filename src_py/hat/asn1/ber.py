@@ -442,6 +442,9 @@ def _encode_objectidentifier(value):
 
     content_bytes = collections.deque()
     for i in value:
+        if i < 0:
+            raise ValueError('invalid object identifier')
+
         i_bytes = collections.deque()
         while i:
             i_bytes.appendleft(0x80 | (i & 0x7F))
