@@ -1,4 +1,4 @@
-hat-doit ~=0.15.15
-hat-json ~=0.5.27
-hat-peg ~=0.5.7
-hat-util ~=0.6.13
+hat-doit ~=0.15.16
+hat-json ~=0.5.28
+hat-peg ~=0.5.9
+hat-util ~=0.6.16
