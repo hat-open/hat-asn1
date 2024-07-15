@@ -21,10 +21,10 @@ Repository = "https://github.com/hat-open/hat-asn1.git"
 Documentation = "http://hat-asn1.hat-open.com"
 
 [project.optional-dependencies]
-dev = ["hat-doit ~=0.15.13"]
+dev = ["hat-doit ~=0.15.15"]
 
 [build-system]
-requires = ["hat-doit ~=0.15.13"]
+requires = ["hat-doit ~=0.15.15"]
 build-backend = "hat.doit.pep517"
 
 [tool.pytest.ini_options]
