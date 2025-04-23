@@ -1,12 +1,14 @@
+from collections.abc import Collection
 import abc
 import enum
+import pathlib
 import typing
 
 from hat import json
+from hat import util
 
 
-Bytes = bytes | bytearray | memoryview
-
+# type ########################################################################
 
 class ClassType(enum.Enum):
     UNIVERSAL = 0
@@ -16,9 +18,9 @@ class ClassType(enum.Enum):
 
 
 class TypeProperty(typing.NamedTuple):
-    name: str
+    name: str | None
     type: 'Type'
-    optional: bool = False
+    optional: bool
 
 
 class TypeRef(typing.NamedTuple):
@@ -85,25 +87,23 @@ class EmbeddedPDVType(typing.NamedTuple):
 
 
 class ChoiceType(typing.NamedTuple):
-    choices: list[TypeProperty]
+    choices: typing.Dict[str, 'Type']
 
 
 class SetType(typing.NamedTuple):
-    elements: list[TypeProperty]
+    elements: Collection[TypeProperty]
 
 
 class SetOfType(typing.NamedTuple):
-    type: 'Type'
-    "elements type definition"
+    element_type: 'Type'
 
 
 class SequenceType(typing.NamedTuple):
-    elements: list[TypeProperty]
+    elements: Collection[TypeProperty]
 
 
 class SequenceOfType(typing.NamedTuple):
-    type: 'Type'
-    "elements type definition"
+    element_type: 'Type'
 
 
 class EntityType(typing.NamedTuple):
@@ -141,84 +141,58 @@ Type: typing.TypeAlias = (TypeRef |
                           EntityType |
                           UnsupportedType |
                           PrefixedType)
-"""Type"""
 
+
+# value #######################################################################
 
 Boolean: typing.TypeAlias = bool
-"""Boolean"""
-
 
 Integer: typing.TypeAlias = int
-"""Integer"""
 
+BitString: typing.TypeAlias = Collection[bool]
 
-BitString: typing.TypeAlias = list[bool]
-"""Bit string"""
-
-
-OctetString: typing.TypeAlias = Bytes
-"""Octet string"""
-
+OctetString: typing.TypeAlias = util.Bytes
 
 Null: typing.TypeAlias = None
-"""Null"""
-
 
 ObjectIdentifier: typing.TypeAlias = tuple[int, ...]
-"""Object identifier"""
-
 
 String: typing.TypeAlias = str
-"""String"""
-
-
-class External(typing.NamedTuple):
-    data: typing.Union['Entity', Bytes, list[bool]]
-    direct_ref: ObjectIdentifier | None
-    indirect_ref: int | None
-
 
 Real: typing.TypeAlias = float
-"""Real"""
-
 
 Enumerated: typing.TypeAlias = int
-"""Enumerated"""
-
-
-class EmbeddedPDV(typing.NamedTuple):
-    """EmbeddedPDV
-
-    If `abstract` is `ObjectIdentifier`, `transfer` must be defined
-
-    """
-    abstract: int | ObjectIdentifier | None
-    transfer: ObjectIdentifier | None
-    data: Bytes
-
 
 Choice: typing.TypeAlias = typing.Tuple[str, 'Value']
-"""Choice"""
-
 
 Set: typing.TypeAlias = typing.Dict[str, 'Value']
-"""Set"""
 
-
-SetOf: typing.TypeAlias = typing.Iterable['Value']
-"""Set of"""
-
+SetOf: typing.TypeAlias = Collection['Value']
 
 Sequence: typing.TypeAlias = typing.Dict[str, 'Value']
-"""Sequence"""
 
-
-SequenceOf: typing.TypeAlias = typing.List['Value']
-"""Sequence of"""
+SequenceOf: typing.TypeAlias = Collection['Value']
 
 
 class Entity(abc.ABC):
     """Encoding independent ASN.1 Entity"""
+
+
+class External(typing.NamedTuple):
+    """External data"""
+    data: Entity | util.Bytes | Collection[bool]
+    direct_ref: ObjectIdentifier | None
+    indirect_ref: int | None
+
+
+class EmbeddedPDV(typing.NamedTuple):
+    """EmbeddedPDV"""
+    syntax: (None |
+             int |
+             ObjectIdentifier |
+             tuple[int, ObjectIdentifier] |
+             tuple[ObjectIdentifier, ObjectIdentifier])
+    data: util.Bytes
 
 
 Value: typing.TypeAlias = (Boolean |
@@ -228,21 +202,140 @@ Value: typing.TypeAlias = (Boolean |
                            Null |
                            ObjectIdentifier |
                            String |
-                           External |
                            Real |
                            Enumerated |
-                           EmbeddedPDV |
                            Choice |
                            Set |
                            SetOf |
                            Sequence |
                            SequenceOf |
-                           Entity)
-"""Value"""
+                           Entity |
+                           External |
+                           EmbeddedPDV)
 
 
-def type_to_json(t: Type) -> json.Data:
-    """Convert type definition to JSON data"""
+# repository ##################################################################
+
+Repository: typing.TypeAlias = dict[TypeRef, Type]
+
+
+def create_repository(*args: pathlib.PurePath | str) -> Repository:
+    """ASN.1 type definition repository.
+
+    Repository can be initialized with multiple arguments, which can be
+    instances of ``pathlib.PurePath`` or ``str``.
+
+    If an argument is of type ``pathlib.PurePath``, and path points to file
+    with a suffix '.asn', ASN.1 type definitions are decoded from the file.
+    Otherwise, it is assumed that path points to a directory,
+    which is recursively searched for ASN.1 definitions. All decoded types
+    are added to the repository. Previously added type definitions with the
+    same references are replaced.
+
+    If an argument is of type ``str``, it represents ASN.1 type definitions.
+    All decoded types are added to the repository. Previously added type
+    definitions with the same references are replaced.
+
+    """
+    from hat.asn1 import parser
+
+    repo = {}
+    for arg in args:
+        if isinstance(arg, pathlib.PurePath):
+            paths = [arg] if arg.suffix == '.asn' else arg.rglob('*.asn')
+            for path in paths:
+                asn1_def = path.read_text(encoding='utf-8')
+                ref_types = parser.parse(asn1_def)
+                repo.update(ref_types)
+
+        elif isinstance(arg, str):
+            refs = parser.parse(arg)
+            repo.update(refs)
+
+        else:
+            raise TypeError('invalid argument type')
+
+    return repo
+
+
+def repository_to_json(repo: Repository) -> json.Data:
+    """Convert repository to JSON data"""
+    return [[_type_to_json(k), _type_to_json(v)]
+            for k, v in repo.items()]
+
+
+def repository_from_json(data: json.Data) -> Repository:
+    """Convert JSON data to repository"""
+    return {_type_from_json(k): _type_from_json(v)
+            for k, v in data}
+
+
+# encoder #####################################################################
+
+class Encoder(abc.ABC):
+    """ASN1 Encoder"""
+
+    @property
+    @abc.abstractmethod
+    def syntax_name(self) -> ObjectIdentifier:
+        """Encoder syntax name"""
+
+    def encode(self,
+               t: Type,
+               value: Value
+               ) -> util.Bytes:
+        """Encode value to data"""
+        entity = self.encode_value(t, value)
+        data = self.encode_entity(entity)
+        return data
+
+    def decode(self,
+               t: Type,
+               data: util.Bytes
+               ) -> tuple[Value, util.Bytes]:
+        """Decode value from data
+
+        Returns value and remaining data.
+
+        """
+        entity, rest = self.decode_entity(data)
+        value = self.decode_value(t, entity)
+        return value, rest
+
+    @abc.abstractmethod
+    def encode_value(self,
+                     t: Type,
+                     value: Value
+                     ) -> Entity:
+        """Encode value to entity"""
+
+    @abc.abstractmethod
+    def decode_value(self,
+                     t: Type,
+                     entity: Entity
+                     ) -> Value:
+        """Decode value from entity"""
+
+    @abc.abstractmethod
+    def encode_entity(self,
+                      entity: Entity
+                      ) -> util.Bytes:
+        """Encode entity to data"""
+
+    @abc.abstractmethod
+    def decode_entity(self,
+                      data: util.Bytes
+                      ) -> tuple[Entity, util.Bytes]:
+        """Decode entity from data
+
+        Returns entity and remaining data.
+
+        """
+
+
+# private #####################################################################
+
+def _type_to_json(t):
     if isinstance(t, TypeRef):
         return ['TypeRef', t.module, t.name]
 
@@ -280,22 +373,22 @@ def type_to_json(t: Type) -> json.Data:
         return ['EmbeddedPDVType']
 
     if isinstance(t, ChoiceType):
-        return ['ChoiceType', [[i.name, type_to_json(i.type)]
-                               for i in t.choices]]
+        return ['ChoiceType', [[k, _type_to_json(v)]
+                               for k, v in t.choices.items()]]
 
     if isinstance(t, SetType):
-        return ['SetType', [[i.name, type_to_json(i.type), i.optional]
+        return ['SetType', [[i.name, _type_to_json(i.type), i.optional]
                             for i in t.elements]]
 
     if isinstance(t, SetOfType):
-        return ['SetOfType', type_to_json(t.type)]
+        return ['SetOfType', _type_to_json(t.element_type)]
 
     if isinstance(t, SequenceType):
-        return ['SequenceType', [[i.name, type_to_json(i.type), i.optional]
+        return ['SequenceType', [[i.name, _type_to_json(i.type), i.optional]
                                  for i in t.elements]]
 
     if isinstance(t, SequenceOfType):
-        return ['SequenceOfType', type_to_json(t.type)]
+        return ['SequenceOfType', _type_to_json(t.element_type)]
 
     if isinstance(t, EntityType):
         return ['EntityType']
@@ -304,14 +397,13 @@ def type_to_json(t: Type) -> json.Data:
         return ['UnsupportedType']
 
     if isinstance(t, PrefixedType):
-        return ['PrefixedType', type_to_json(t.type), t.class_type.name,
+        return ['PrefixedType', _type_to_json(t.type), t.class_type.name,
                 t.tag_number, t.implicit]
 
-    raise ValueError('invalid type definition')
+    raise TypeError('invalid type definition')
 
 
-def type_from_json(data: json.Data) -> Type:
-    """Convert JSON data to type definition"""
+def _type_from_json(data):
     if data[0] == 'TypeRef':
         return TypeRef(module=data[1],
                        name=data[2])
@@ -350,27 +442,26 @@ def type_from_json(data: json.Data) -> Type:
         return EmbeddedPDVType()
 
     if data[0] == 'ChoiceType':
-        return ChoiceType([TypeProperty(name=i[0],
-                                        type=type_from_json(i[1]))
-                           for i in data[1]])
+        return ChoiceType({k: _type_from_json(v)
+                           for k, v in data[1]})
 
     if data[0] == 'SetType':
         return SetType([TypeProperty(name=i[0],
-                                     type=type_from_json(i[1]),
+                                     type=_type_from_json(i[1]),
                                      optional=i[2])
                         for i in data[1]])
 
     if data[0] == 'SetOfType':
-        return SetOfType(type_from_json(data[1]))
+        return SetOfType(_type_from_json(data[1]))
 
     if data[0] == 'SequenceType':
         return SequenceType([TypeProperty(name=i[0],
-                                          type=type_from_json(i[1]),
+                                          type=_type_from_json(i[1]),
                                           optional=i[2])
                              for i in data[1]])
 
     if data[0] == 'SequenceOfType':
-        return SequenceOfType(type_from_json(data[1]))
+        return SequenceOfType(_type_from_json(data[1]))
 
     if data[0] == 'EntityType':
         return EntityType()
@@ -379,7 +470,7 @@ def type_from_json(data: json.Data) -> Type:
         return UnsupportedType()
 
     if data[0] == 'PrefixedType':
-        return PrefixedType(type=type_from_json(data[1]),
+        return PrefixedType(type=_type_from_json(data[1]),
                             class_type=ClassType[data[2]],
                             tag_number=data[3],
                             implicit=data[4])

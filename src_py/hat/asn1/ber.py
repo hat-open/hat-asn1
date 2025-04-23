@@ -1,18 +1,20 @@
+from collections.abc import Collection
 import collections
 import itertools
 import math
 import typing
 
 from hat import util
+
 from hat.asn1 import common
 
 
 class PrimitiveContent(typing.NamedTuple):
-    value: common.Bytes
+    value: util.Bytes
 
 
 class ConstructedContent(typing.NamedTuple):
-    elements: typing.List['Entity']
+    elements: Collection['Entity']
 
 
 class Entity(typing.NamedTuple):
@@ -24,13 +26,42 @@ class Entity(typing.NamedTuple):
 common.Entity.register(Entity)
 
 
-def encode_value(refs: dict[common.TypeRef, common.Type],
-                 t: common.Type,
-                 value: common.Value
-                 ) -> Entity:
-    """Encode value to entity"""
+class BerEncoder(common.Encoder):
+    """BER Encoder"""
+
+    def __init__(self, repo: common.Repository):
+        self._repo = repo
+
+    @property
+    def syntax_name(self) -> common.ObjectIdentifier:
+        return (2, 1, 1)  # (joint-iso-itu-t, asn1, basic-encoding)
+
+    def encode_value(self,
+                     t: common.Type,
+                     value: common.Value
+                     ) -> Entity:
+        return _encode_value(self._repo, t, value)
+
+    def decode_value(self,
+                     t: common.Type,
+                     entity: Entity
+                     ) -> common.Value:
+        return _decode_value(self._repo, t, entity)
+
+    def encode_entity(self,
+                      entity: Entity
+                      ) -> util.Bytes:
+        return _encode_entity(entity)
+
+    def decode_entity(self,
+                      data: util.Bytes
+                      ) -> tuple[Entity, util.Bytes]:
+        return _decode_entity(data)
+
+
+def _encode_value(repo, t, value):
     while isinstance(t, common.TypeRef):
-        t = refs[t]
+        t = repo[t]
 
     if isinstance(t, common.BooleanType):
         return Entity(class_type=common.ClassType.UNIVERSAL,
@@ -88,30 +119,30 @@ def encode_value(refs: dict[common.TypeRef, common.Type],
                       content=_encode_embeddedpdv(value))
 
     if isinstance(t, common.ChoiceType):
-        name, subvalue = value
-        prop = util.first(t.choices, lambda x: x.name == name)
-        return encode_value(refs, prop.type, subvalue)
+        return _encode_value(repo, t.choices[value[0]], value[1])
 
     if isinstance(t, common.SetType):
-        elements = list(_encode_elements(refs, t.elements, value))
+        props = _resolve_named_type_props(repo, t, common.SetType)
+        elements = collections.deque(_encode_elements(repo, props, value))
         return Entity(class_type=common.ClassType.UNIVERSAL,
                       tag_number=17,
                       content=ConstructedContent(elements))
 
     if isinstance(t, common.SetOfType):
-        elements = [encode_value(refs, t.type, i) for i in value]
+        elements = [_encode_value(repo, t.element_type, i) for i in value]
         return Entity(class_type=common.ClassType.UNIVERSAL,
                       tag_number=17,
                       content=ConstructedContent(elements))
 
     if isinstance(t, common.SequenceType):
-        elements = list(_encode_elements(refs, t.elements, value))
+        props = _resolve_named_type_props(repo, t, common.SequenceType)
+        elements = collections.deque(_encode_elements(repo, props, value))
         return Entity(class_type=common.ClassType.UNIVERSAL,
                       tag_number=16,
                       content=ConstructedContent(elements))
 
     if isinstance(t, common.SequenceOfType):
-        elements = [encode_value(refs, t.type, i) for i in value]
+        elements = [_encode_value(repo, t.element_type, i) for i in value]
         return Entity(class_type=common.ClassType.UNIVERSAL,
                       tag_number=16,
                       content=ConstructedContent(elements))
@@ -123,7 +154,7 @@ def encode_value(refs: dict[common.TypeRef, common.Type],
         raise NotImplementedError()
 
     if isinstance(t, common.PrefixedType):
-        entity = encode_value(refs, t.type, value)
+        entity = _encode_value(repo, t.type, value)
         content = (entity.content if t.implicit
                    else ConstructedContent([entity]))
         return Entity(class_type=t.class_type,
@@ -133,13 +164,9 @@ def encode_value(refs: dict[common.TypeRef, common.Type],
     raise ValueError('invalid type definition')
 
 
-def decode_value(refs: dict[common.TypeRef, common.Type],
-                 t: common.Type,
-                 entity: Entity
-                 ) -> common.Value:
-    """Decode value from entity"""
+def _decode_value(repo, t, entity):
     while isinstance(t, common.TypeRef):
-        t = refs[t]
+        t = repo[t]
 
     if isinstance(t, common.BooleanType):
         return _decode_boolean(entity.content)
@@ -175,10 +202,10 @@ def decode_value(refs: dict[common.TypeRef, common.Type],
         return _decode_embeddedpdv(entity.content)
 
     if isinstance(t, common.ChoiceType):
-        for prop in t.choices:
-            if _match_type_entity(refs, prop.type, entity):
-                value = decode_value(refs, prop.type, entity)
-                return prop.name, value
+        for choice_name, choice_type in t.choices.items():
+            if _match_type_entity(repo, choice_type, entity):
+                value = _decode_value(repo, choice_type, entity)
+                return choice_name, value
 
         raise ValueError('invalid choice')
 
@@ -186,33 +213,34 @@ def decode_value(refs: dict[common.TypeRef, common.Type],
         value = {}
         elements = list(entity.content.elements)
 
-        for prop in t.elements:
+        for prop in _resolve_named_type_props(repo, t, common.SetType):
             for i, element in enumerate(elements):
-                if _match_type_entity(refs, prop.type, element):
+                if _match_type_entity(repo, prop.type, element):
                     break
 
             else:
                 if prop.optional:
                     continue
+
                 raise ValueError(f'missing property {prop.name}')
 
-            value[prop.name] = decode_value(refs, prop.type, element)
+            value[prop.name] = _decode_value(repo, prop.type, element)
             del elements[i]
 
         return value
 
     if isinstance(t, common.SetOfType):
-        return [decode_value(refs, t.type, i)
+        return [_decode_value(repo, t.element_type, i)
                 for i in entity.content.elements]
 
     if isinstance(t, common.SequenceType):
         value = {}
         elements = collections.deque(entity.content.elements)
 
-        for prop in t.elements:
-            if elements and _match_type_entity(refs, prop.type, elements[0]):
-                value[prop.name] = decode_value(refs, prop.type,
-                                                elements.popleft())
+        for prop in _resolve_named_type_props(repo, t, common.SequenceType):
+            if elements and _match_type_entity(repo, prop.type, elements[0]):
+                value[prop.name] = _decode_value(repo, prop.type,
+                                                 elements.popleft())
 
             elif not prop.optional:
                 raise ValueError(f'missing property {prop.name}')
@@ -220,7 +248,7 @@ def decode_value(refs: dict[common.TypeRef, common.Type],
         return value
 
     if isinstance(t, common.SequenceOfType):
-        return [decode_value(refs, t.type, i)
+        return [_decode_value(repo, t.element_type, i)
                 for i in entity.content.elements]
 
     if isinstance(t, common.EntityType):
@@ -231,13 +259,12 @@ def decode_value(refs: dict[common.TypeRef, common.Type],
 
     if isinstance(t, common.PrefixedType):
         subentity = entity if t.implicit else entity.content.elements[0]
-        return decode_value(refs, t.type, subentity)
+        return _decode_value(repo, t.type, subentity)
 
     raise ValueError('invalid type definition')
 
 
-def encode_entity(entity: Entity) -> common.Bytes:
-    """Encode entity"""
+def _encode_entity(entity):
     is_primitive = isinstance(entity.content, PrimitiveContent)
     is_constructed = isinstance(entity.content, ConstructedContent)
     entity_bytes = collections.deque()
@@ -269,7 +296,7 @@ def encode_entity(entity: Entity) -> common.Bytes:
 
     elif is_constructed:
         next_bytes = collections.deque(itertools.chain.from_iterable(
-            encode_entity(entity)
+            _encode_entity(entity)
             for entity in entity.content.elements))
         entity_bytes.extend(_encode_entity_length(len(next_bytes)))
         entity_bytes.extend(next_bytes)
@@ -280,12 +307,7 @@ def encode_entity(entity: Entity) -> common.Bytes:
     return bytes(entity_bytes)
 
 
-def decode_entity(data: common.Bytes) -> tuple[Entity, common.Bytes]:
-    """Decode entity
-
-    Returns entity and remaining data.
-
-    """
+def _decode_entity(data):
     class_type = common.ClassType(data[0] >> 6)
     is_constructed = bool(data[0] & 0x20)
     tag_number = data[0] & 0x1F
@@ -309,11 +331,11 @@ def decode_entity(data: common.Bytes) -> tuple[Entity, common.Bytes]:
 
         elements = collections.deque()
         while data[:2] != b'\x00\x00':
-            subentity, data = decode_entity(data)
+            subentity, data = _decode_entity(data)
             elements.append(subentity)
 
         data = data[2:]
-        content = ConstructedContent(list(elements))
+        content = ConstructedContent(elements)
         entity = Entity(class_type=class_type,
                         tag_number=tag_number,
                         content=content)
@@ -329,9 +351,9 @@ def decode_entity(data: common.Bytes) -> tuple[Entity, common.Bytes]:
     if is_constructed:
         elements = collections.deque()
         while content_bytes:
-            subentity, content_bytes = decode_entity(content_bytes)
+            subentity, content_bytes = _decode_entity(content_bytes)
             elements.append(subentity)
-        content = ConstructedContent(list(elements))
+        content = ConstructedContent(elements)
 
     else:
         content = PrimitiveContent(content_bytes)
@@ -342,12 +364,40 @@ def decode_entity(data: common.Bytes) -> tuple[Entity, common.Bytes]:
     return entity, data
 
 
-def _encode_elements(refs, props, value):
+def _resolve_named_type_props(repo, t, valid_cls):
+    while True:
+        if isinstance(t, common.TypeRef):
+            t = repo[t]
+
+        elif isinstance(t, common.PrefixedType):
+            t = t.type
+
+        else:
+            break
+
+    if not isinstance(t, valid_cls):
+        raise TypeError('invalid property type')
+
+    for i in t.elements:
+        if i.name is not None:
+            yield i
+
+        else:
+            props = _resolve_named_type_props(repo, i.type, valid_cls)
+
+            # TODO optional collection - not individual props
+            if i.optional:
+                props = (prop._replace(optional=True) for prop in props)
+
+            yield from props
+
+
+def _encode_elements(repo, props, value):
     for prop in props:
         if prop.optional and prop.name not in value:
             continue
 
-        yield encode_value(refs, prop.type, value[prop.name])
+        yield _encode_value(repo, prop.type, value[prop.name])
 
 
 def _encode_boolean(value):
@@ -511,12 +561,15 @@ def _encode_external(value):
     if isinstance(value.data, Entity):
         entity = Entity(common.ClassType.CONTEXT_SPECIFIC, 0,
                         ConstructedContent([value.data]))
-    elif isinstance(value.data, (bytes, bytearray, memoryview)):
+
+    elif isinstance(value.data, util.Bytes):
         entity = Entity(common.ClassType.CONTEXT_SPECIFIC, 1,
                         _encode_octetstring(value.data))
+
     else:
         entity = Entity(common.ClassType.CONTEXT_SPECIFIC, 2,
                         _encode_bitstring(value.data))
+
     elements.append(entity)
 
     return ConstructedContent(list(elements))
@@ -556,76 +609,77 @@ def _decode_real(content):
     raise NotImplementedError()
 
 
+_embeddedpdv_type = common.SequenceType([
+    common.TypeProperty(
+        name='identification',
+        type=common.ChoiceType({
+            'fixed': common.NullType(),
+            'id': common.IntegerType(),
+            'syntax': common.ObjectIdentifierType(),
+            'syntaxes': common.SequenceType([
+                common.TypeProperty(
+                    name='abstract',
+                    type=common.ChoiceType({
+                        'id': common.IntegerType(),
+                        'oid': common.ObjectIdentifierType()}),
+                    optional=False),
+                common.TypeProperty(
+                    name='transfer',
+                    type=common.ObjectIdentifierType(),
+                    optional=False)])}),
+        optional=False),
+    common.TypeProperty('data', common.OctetStringType(), False)])
+
+
 def _encode_embeddedpdv(value):
-    if value.abstract is not None:
-        if isinstance(value.abstract, int):
-            abstract_entity = Entity(common.ClassType.UNIVERSAL, 2,
-                                     _encode_integer(value.abstract))
-        elif value.transfer is not None:
-            abstract_entity = Entity(common.ClassType.UNIVERSAL, 6,
-                                     _encode_objectidentifier(value.abstract))
+    if value.syntax is None:
+        identification = 'fixed', None
+
+    elif isinstance(value.syntax, int):
+        identification = 'id', value.syntax
+
+    elif isinstance(value.syntax, tuple):
+        if len(value.syntax) == 2 and isinstance(value.syntax[1], tuple):
+            if isinstance(value.syntax[0], int):
+                abstract = 'id', value.syntax[0]
+
+            else:
+                abstract = 'oid', value.syntax[0]
+
+            identification = 'syntaxes', {'abstract': abstract,
+                                          'transfer': value.syntax[1]}
+
         else:
-            raise ValueError()
+            identification = 'syntax', value.syntax
 
-    if value.transfer is not None:
-        transfer_entity = Entity(common.ClassType.UNIVERSAL, 6,
-                                 _encode_objectidentifier(value.transfer))
-
-    if value.abstract is None and value.transfer is None:
-        identification_entity = Entity(common.ClassType.UNIVERSAL, 5,
-                                       _encode_null())
-    elif value.abstract is None:
-        identification_entity = transfer_entity
-    elif value.transfer is None:
-        identification_entity = abstract_entity
     else:
-        identification_entity = Entity(
-            common.ClassType.UNIVERSAL, 16, ConstructedContent([
-                abstract_entity, transfer_entity]))
+        raise TypeError('unsupported value type')
 
-    data_entity = Entity(common.ClassType.UNIVERSAL, 4,
-                         _encode_octetstring(value.data))
+    entity = _encode_value({}, _embeddedpdv_type,
+                           {'identification': identification,
+                            'data': value.data})
 
-    return ConstructedContent([identification_entity, data_entity])
+    return entity.content
 
 
 def _decode_embeddedpdv(content):
-    identification_entity = content.elements[0]
-    data_entity = content.elements[-1]
+    entity = Entity(class_type=common.ClassType.UNIVERSAL,
+                    tag_number=16,
+                    content=content)
+    value = _decode_value({}, _embeddedpdv_type, entity)
 
-    if isinstance(identification_entity.content, ConstructedContent):
-        abstract_entity = identification_entity.content.elements[0]
-        transfer_entity = identification_entity.content.elements[1]
-        if abstract_entity.tag_number == 6:
-            abstract = _decode_objectidentifier(abstract_entity.content)
-        elif abstract_entity.tag_number == 2:
-            abstract = _decode_integer(abstract_entity.content)
-        else:
-            raise ValueError('invalid content')
-        if transfer_entity.tag_number != 6:
-            raise ValueError('invalid content')
-        transfer = _decode_objectidentifier(transfer_entity.content)
+    if value['identification'][0] in ('fixed', 'id', 'syntax'):
+        syntax = value['identification'][1]
+
+    elif value['identification'][0] == 'syntaxes':
+        syntax = (value['identification'][1]['abstract'][1],
+                  value['identification'][1]['transfer'])
 
     else:
-        if identification_entity.tag_number == 6:
-            abstract = None
-            transfer = _decode_objectidentifier(identification_entity.content)
-        elif identification_entity.tag_number == 2:
-            abstract = _decode_integer(identification_entity.content)
-            transfer = None
-        elif identification_entity.tag_number == 5:
-            abstract = None
-            transfer = None
-        else:
-            raise ValueError('invalid content')
+        raise ValueError('unsupported identification')
 
-    if data_entity.tag_number != 4:
-        raise ValueError('invalid content')
-    data = _decode_octetstring(data_entity.content)
-
-    return common.EmbeddedPDV(abstract=abstract,
-                              transfer=transfer,
-                              data=data)
+    return common.EmbeddedPDV(syntax=syntax,
+                              data=value['data'])
 
 
 def _encode_entity_length(length):
@@ -641,9 +695,9 @@ def _encode_entity_length(length):
     yield from length.to_bytes(size, 'big')
 
 
-def _match_type_entity(refs, t, entity):
+def _match_type_entity(repo, t, entity):
     while isinstance(t, common.TypeRef):
-        t = refs[t]
+        t = repo[t]
 
     if isinstance(t, common.BooleanType):
         return (entity.class_type == common.ClassType.UNIVERSAL and
@@ -690,8 +744,8 @@ def _match_type_entity(refs, t, entity):
                 entity.tag_number == 11)
 
     if isinstance(t, common.ChoiceType):
-        return any(_match_type_entity(refs, i.type, entity)
-                   for i in t.choices)
+        return any(_match_type_entity(repo, i, entity)
+                   for i in t.choices.values())
 
     if isinstance(t, common.SetType) or isinstance(t, common.SetOfType):
         return (entity.class_type == common.ClassType.UNIVERSAL and

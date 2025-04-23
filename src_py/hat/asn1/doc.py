@@ -1,13 +1,12 @@
+import collections
+
 from hat.asn1 import common
 
 
-def generate_html(refs: dict[common.TypeRef, common.Type]
-                  ) -> str:
+def generate_html_doc(repo: common.Repository) -> str:
     """Generate HTML documentation"""
-    modules = {}
-    for ref, t in refs.items():
-        if ref.module not in modules:
-            modules[ref.module] = {}
+    modules = collections.defaultdict(dict)
+    for ref, t in repo.items():
         modules[ref.module][ref] = t
 
     toc = ''.join(f'<p>{_generate_module_toc(module_name, module_refs)}</p>'
@@ -104,15 +103,15 @@ def _generate_type(t):
 
     if isinstance(t, common.ChoiceType):
         content = ''.join(
-            f'<tr><td>{i.name}</td><td>{_generate_type(i.type)}</td></tr>'
-            for i in t.choices)
+            f'<tr><td>{k}</td><td>{_generate_type(v)}</td></tr>'
+            for k, v in t.choices.items())
         return (f'<table><tr><th colspan="2">CHOICE</th></tr>'
                 f'{content}</table>')
 
     if isinstance(t, common.SetType) or isinstance(t, common.SequenceType):
         title = 'SET' if isinstance(t, common.SetType) else 'SEQUENCE'
         content = ''.join(
-            f'<tr><td>{i.name}{_optional if i.optional else ""}</td>'
+            f'<tr><td>{i.name or ""}{_optional if i.optional else ""}</td>'
             f'<td>{_generate_type(i.type)}</td></tr>'
             for i in t.elements)
         return (f'<table><tr><th colspan="2">{title}</th></tr>'
@@ -120,8 +119,8 @@ def _generate_type(t):
 
     if isinstance(t, common.SetOfType) or isinstance(t, common.SequenceOfType):
         title = 'SET OF' if isinstance(t, common.SetType) else 'SEQUENCE OF'
-        content = _generate_type(t.type)
-        return (f'<table><tr><th colspan="2">SET OF</th></tr>'
+        content = _generate_type(t.element_type)
+        return (f'<table><tr><th colspan="2">{title}</th></tr>'
                 f'<tr><td>{content}</td></tr></table>')
 
     if isinstance(t, common.EntityType):

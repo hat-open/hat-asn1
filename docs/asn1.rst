@@ -1,5 +1,3 @@
-.. _hat-asn1:
-
 `hat.asn1` - Python Abstract Syntax Notation One library
 ========================================================
 
@@ -21,172 +19,153 @@ Mapping between ASN.1 data types and built in types:
     +-----------------------+-------------------+
     | Integer               | int               |
     +-----------------------+-------------------+
-    | BitString             | List[bool]        |
+    | BitString             | Collection[bool]  |
     +-----------------------+-------------------+
     | OctetString           | Bytes             |
     +-----------------------+-------------------+
     | Null                  | NoneType          |
     +-----------------------+-------------------+
-    | ObjectIdentifier      | Tuple[int, ...]   |
+    | ObjectIdentifier      | tuple[int, ...]   |
     +-----------------------+-------------------+
     | String                | str               |
-    +-----------------------+-------------------+
-    | External              | External          |
     +-----------------------+-------------------+
     | Real                  | float             |
     +-----------------------+-------------------+
     | Enumerated            | int               |
     +-----------------------+-------------------+
-    | EmbeddedPDV           | EmbeddedPDV       |
+    | Choice                | tuple[str, Value] |
     +-----------------------+-------------------+
-    | Choice                | Tuple[str, Value] |
+    | Set                   | dict[str, Value]  |
     +-----------------------+-------------------+
-    | Set                   | Dict[str, Value]  |
+    | SetOf                 | Collection[Value] |
     +-----------------------+-------------------+
-    | SetOf                 | Iterable[Value]   |
+    | Sequence              | dict[str, Value]  |
     +-----------------------+-------------------+
-    | Sequence              | Dict[str, Value]  |
-    +-----------------------+-------------------+
-    | SequenceOf            | List[Value]       |
+    | SequenceOf            | Collection[Value] |
     +-----------------------+-------------------+
     | ABSTRACT-SYNTAX.&Type | Entity            |
+    +-----------------------+-------------------+
+    | External              | External          |
+    +-----------------------+-------------------+
+    | EmbeddedPDV           | EmbeddedPDV       |
     +-----------------------+-------------------+
 
 For Choice, Set and Sequence, `str` represents field name.
 
 According to previous mapping, this library defines following types::
 
-    Bytes = typing.Union[bytes, bytearray, memoryview]
-
-    Value = typing.Union['Boolean',
-                         'Integer',
-                         'BitString',
-                         'OctetString',
-                         'Null',
-                         'ObjectIdentifier',
-                         'String',
-                         'External',
-                         'Real',
-                         'Enumerated',
-                         'EmbeddedPDV',
-                         'Choice',
-                         'Set',
-                         'SetOf',
-                         'Sequence',
-                         'SequenceOf',
-                         'Entity']
+    Value = (Boolean |
+             Integer |
+             BitString |
+             OctetString |
+             Null |
+             ObjectIdentifier |
+             String |
+             Real |
+             Enumerated |
+             Choice |
+             Set |
+             SetOf |
+             Sequence |
+             SequenceOf |
+             Entity |
+             External |
+             EmbeddedPDV)
 
     Boolean = bool
     Integer = int
-    BitString = typing.List[bool]
+    BitString = Collection[bool]
     OctetString = Bytes
     Null = None
-    ObjectIdentifier = typing.Tuple[int, ...]
+    ObjectIdentifier = tuple[int, ...]
     String = str
     Real = float
     Enumerated = int
-    Choice = typing.Tuple[str, Value]
-    Set = typing.Dict[str, Value]
-    SetOf = typing.Iterable[Value]
-    Sequence = typing.Dict[str, Value]
-    SequenceOf = typing.List[Value]
-
-    class External(typing.NamedTuple):
-        data: typing.Union['Entity', Data, typing.List[bool]]
-        direct_ref: typing.Optional[ObjectIdentifier]
-        indirect_ref: typing.Optional[int]
-
-    class EmbeddedPDV(typing.NamedTuple):
-        abstract: typing.Optional[typing.Union[int, ObjectIdentifier]]
-        transfer: typing.Optional[ObjectIdentifier]
-        data: Data
+    Choice = tuple[str, Value]
+    Set = dict[str, Value]
+    SetOf = Collection[Value]
+    Sequence = dict[str, Value]
+    SequenceOf = Collection[Value]
 
     class Entity(abc.ABC):
         """Encoding independent ASN.1 Entity"""
 
+    class External(typing.NamedTuple):
+        data: Entity | Bytes | Collection[bool]
+        direct_ref: ObjectIdentifier | None
+        indirect_ref: int | None
 
-.. _hat-asn1-Repository:
+    class EmbeddedPDV(typing.NamedTuple):
+        syntax: (None |
+                 int |
+                 ObjectIdentifier |
+                 tuple[int, ObjectIdentifier] |
+                 tuple[ObjectIdentifier, ObjectIdentifier])
+        data: Data
+
 
 Repository
 ----------
 
-`hat.asn1.Repository` is used as parser of ASN.1 schemas. ASN.1 data definition
-is parsed during `Repository` instance initialization. These definitions
-are required for encoding/decoding ASN.1 data. Instance of `Repository` can be
+`hat.asn1.Repository` is collection of references to ASN.1 type definitions.
+It can created by parsing ASN.1 schemas. ASN.1 data definitions are required
+for encoding/decoding ASN.1 data. `hat.asn1.Repository` can be
 represented as JSON data enabling efficient storage and reconstruction of ASN.1
-repositories without repetitive parsing of ASN.1 schemas.
+type definitions without repetitive parsing of ASN.1 schemas.
 
 ::
+    Repository = dict[TypeRef, Type]
 
-    class Repository:
+    def create_repository(*args: pathlib.PurePath | str) -> Repository: ...
 
-        def __init__(self, *args: typing.Union[pathlib.PurePath,
-                                               str,
-                                               'Repository']): ...
+    def repository_to_json(repo: Repository) -> json.Data: ...
 
-        @staticmethod
-        def from_json(data: typing.Union[pathlib.PurePath, json.Data]
-                      ) -> 'Repository': ...
+    def repository_from_json(data: json.Data) -> Repository: ...
 
-        def to_json(self) -> json.Data: ...
+def repository_from_json(data: json.Data) -> Repository:
 
-        def generate_html_doc(self) -> str: ...
+Once instance of `hat.asn1.Repository` is created, HTML documentation
+describing data structures can be generated with `generate_html_doc` method.
 
-Once instance of `Repository` is created, HTML documentation describing
-data structures can be generated with `generate_html_doc` method (example
-of `generated documentation <../../asn1/doc.html>`_).
-
-
-.. _hat-asn1-Encoder:
 
 Encoder
 -------
 
 `hat.asn1.Encoder` provides interface for encoding/decoding ASN.1 data
-based on ASN.1 data definitions parsed by `hat.asn1.Repository`::
-
-    Encoding = enum.Enum('Encoding', ['BER'])
+based on ASN.1 data definitions (`hat.asn1.Repository`)::
 
     class Encoder:
-
-        def __init__(self,
-                     encoding: Encoding,
-                     repository: Repository): ...
 
         @property
         def syntax_name(self) -> ObjectIdentifier: ...
 
         def encode(self,
-                   module: str,
-                   name: str,
+                   t: Type,
                    value: Value
-                   ) -> Bytes: ...
+                   ) -> util.Bytes: ...
 
         def decode(self,
-                   module: str,
-                   name: str,
-                   data: Bytes
-                   ) -> typing.Tuple[Value, Bytes]: ...
+                   t: Type,
+                   data: util.Bytes
+                   ) -> tuple[Value, util.Bytes]: ...
 
         def encode_value(self,
-                         module: str,
-                         name: str,
+                         t: Type,
                          value: Value
                          ) -> Entity: ...
 
         def decode_value(self,
-                         module: str,
-                         name: str,
+                         t: Type,
                          entity: Entity
                          ) -> Value: ...
 
         def encode_entity(self,
                           entity: Entity
-                          ) -> Bytes: ...
+                          ) -> util.Bytes: ...
 
         def decode_entity(self,
-                          data: Bytes
-                          ) -> typing.Tuple[Entity, Bytes]: ...
+                          data: util.Bytes
+                          ) -> tuple[Entity, util.Bytes]: ...
 
 
 Example
@@ -194,7 +173,7 @@ Example
 
 ::
 
-    repo = asn1.Repository(r"""
+    repo = asn1.create_repository(r"""
         Example DEFINITIONS ::= BEGIN
             T ::= SEQUENCE OF CHOICE {
                 a BOOLEAN,
@@ -204,12 +183,13 @@ Example
         END
     """)
 
-    encoder = asn1.Encoder(asn1.Encoding.BER, repo)
+    encoder = asn1.ber.BerEncoder(repo)
 
+    ref = asn1.TypeRef('Example', 'T')
     value = [('c', '123'), ('a', True), ('a', False), ('b', 123)]
 
-    encoded = encoder.encode('Example', 'T', value)
-    decoded, rest = encoder.decode('Example', 'T', encoded)
+    encoded = encoder.encode(ref, value)
+    decoded, rest = encoder.decode(ref, encoded)
 
     assert value == decoded
     assert len(rest) == 0

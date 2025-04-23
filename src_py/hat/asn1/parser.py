@@ -1,12 +1,12 @@
 import itertools
 
-from hat import util
 from hat import peg
+from hat import util
+
 from hat.asn1 import common
 
 
-def parse(asn1_def: str
-          ) -> dict[common.TypeRef, common.Type]:
+def parse(asn1_def: str) -> common.Repository:
     """Parse ASN.1"""
     ast = _grammar.parse(asn1_def)
     refs = peg.walk_ast(ast, _actions)
@@ -30,13 +30,13 @@ def _act_ModuleDefinition(n, c):
                                         else default_implicit))
         if (isinstance(t, common.SetOfType) or
                 isinstance(t, common.SequenceOfType)):
-            return t._replace(type=sanitize(t.type))
+            return t._replace(element_type=sanitize(t.element_type))
         if isinstance(t, common.SetType) or isinstance(t, common.SequenceType):
             return t._replace(elements=[i._replace(type=sanitize(i.type))
                                         for i in t.elements])
         if isinstance(t, common.ChoiceType):
-            return t._replace(choices=[i._replace(type=sanitize(i.type))
-                                       for i in t.choices])
+            return t._replace(choices={k: sanitize(v)
+                                       for k, v in t.choices.items()})
         if isinstance(t, common.TypeRef):
             if t == common.TypeRef('ABSTRACT-SYNTAX', 'Type'):
                 return common.EntityType()
@@ -106,7 +106,8 @@ def _act_ReferencedType(n, c):
 
 
 def _act_ChoiceElement(n, c):
-    return c[0] if isinstance(c[0], common.TypeProperty) else None
+    return ((c[0].name, c[0].type) if isinstance(c[0], common.TypeProperty)
+            else None)
 
 
 def _act_SetOfType(n, c):
@@ -153,7 +154,7 @@ def _act_ComponentTypeList(n, c):
 
 def _act_ComponentType(n, c):
     if c[0] == 'COMPONENTS OF':
-        return
+        return common.TypeProperty(None, c[-1], False)
     if len(c) > 1:
         return c[0]._replace(optional=True)
     return c[0]
@@ -217,7 +218,7 @@ _actions = {
     'Type': _act_Type,
     'TypeWithConstraint': _act_TypeWithConstraint,
     'ReferencedType': _act_ReferencedType,
-    'NamedType': lambda n, c: common.TypeProperty(c[0], c[1]),
+    'NamedType': lambda n, c: common.TypeProperty(c[0], c[1], False),
     'BuiltinType': lambda n, c: c[0],
     'BooleanType': lambda n, c: common.BooleanType(),
     'IntegerType': lambda n, c: common.IntegerType(),
@@ -233,7 +234,7 @@ _actions = {
     'EmbeddedPDVType': lambda n, c: common.EmbeddedPDVType(),
     'EnumeratedType': lambda n, c: common.EnumeratedType(),
     'ExternalType': lambda n, c: common.ExternalType(),
-    'ChoiceType': lambda n, c: common.ChoiceType(c[4]),
+    'ChoiceType': lambda n, c: common.ChoiceType(dict(c[4])),
     'ChoiceList': lambda n, c: [i for i in c if i and i != ','],
     'ChoiceElement': _act_ChoiceElement,
     'SetType': lambda n, c: common.SetType(c[4]),
