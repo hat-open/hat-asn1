@@ -1,14 +1,14 @@
 [project]
 name = "hat-asn1"
-version = "0.7.0"
+version = "0.7.1"
 description = "Hat ASN.1 parser and encoder"
 readme = "README.rst"
 requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
 dependencies = [
-    "hat-json ~=0.6.2",
-    "hat-peg ~=0.5.10",
-    "hat-util ~=0.6.19",
+    "hat-json ~=0.6.8",
+    "hat-peg ~=0.5.11",
+    "hat-util ~=0.6.22",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -20,11 +20,20 @@ Homepage = "http://hat-open.com"
 Repository = "https://github.com/hat-open/hat-asn1.git"
 Documentation = "http://hat-asn1.hat-open.com"
 
-[project.optional-dependencies]
-dev = ["hat-doit ~=0.16.2"]
+[dependency-groups]
+run = [
+    "hat-json ~=0.6.8",
+    "hat-peg ~=0.5.11",
+    "hat-util ~=0.6.22",
+]
+build = ["hat-doit ~=0.16.4"]
+dev = [
+    {include-group = "run"},
+    {include-group = "build"},
+]
 
 [build-system]
-requires = ["hat-doit ~=0.16.2"]
+requires = ["hat-doit ~=0.16.4"]
 build-backend = "hat.doit.pep517"
 
 [tool.pytest.ini_options]
